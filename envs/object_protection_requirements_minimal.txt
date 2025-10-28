@@ -1,16 +1,9 @@
-# 最小依赖包 - 仅运行 video_relic_tracking.py 必需
-# 适用于文物检测与跟踪系统
+# 最小依赖包 - 仅运行 video_relic_tracking.py 所需
+# 若需使用 integrated_safety_monitor，请改用 object_protection_requirements.txt
 
-# 深度学习框架
 torch>=1.7.0
 torchvision>=0.8.1
-
-# 计算机视觉
 opencv-python>=4.1.1
-numpy>=1.18.5
-
-# 网络请求
+numpy>=1.18.5,<1.24.0
 requests>=2.23.0
-
-# 配置文件
 PyYAML>=5.3.1

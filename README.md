@@ -1,9 +1,98 @@
-# 注意事项
-# 0.统一使用Python3.9
-1. 避免冲突：提交你的项目部分时，请在提交前确保先`git pull origin main`一次，避免项目冲突。
-2. 文件整理：建议不要将你的部分的文件直接放在项目根目录下，最好自己建个文件夹整理一下，（如 pose/, emotion/, web/ 等），保持整洁。
-3. 使用git进行团队合作：建议不要直接`git push`到main分支，而是自己去新建一个feature分支，如`git checkout -b feature-pose`,具体命名就按你负责的部分的功能的英文。我（YLS）会检查代码并合并分支。相关内容学习可以看我推荐的b站视频和自学。比较有用，建议学习。
-4. 环境的问题：建议在自己电脑上安装ubuntu虚拟机，在虚拟机里运行调试代码。另外通过conda来创建一个虚拟环境用来做这个项目，方便后续导出环境配置列表.`conda env export --no-builds > environment.yml`，然后把你的文件重命名放到envs目录下.另外有些具体细节交接的时候说不清楚，请写成文档，放在docs目录下
-5. 使用gitignore：不要上传模型权重文件（.onnx / .pt / .pth）或大型数据集，上传前请添加到 .gitignore(用于标明git忽略的文件)。权重等这部分请线下面交。运行产生的中途文件请也忽略，删除或者ignore，不要上传到github仓库。
-6. 个人学习：不明白都可以问GPT等AI，群里也可以问。大家可以一起想办法。能学到东西就很好。
-7. 版本管理：充分利用git进行版本管理，避免修改内容造成已完成部分的损坏。
+# CV Safety System / 计算机视觉安全系统
+
+该仓库聚合了两个围绕文物安全场景构建的计算机视觉子系统：
+
+- **WebcamPoseDetection** – 基于 MediaPipe 的实时 33 关键点人体姿态识别。
+- **object_protection** – 基于 YOLOv7-tiny 的文物检测、目标跟踪与安全联动监控。
+
+文档与环境配置文件位于 `docs/` 与 `envs/` 目录，下文给出整体指引与快速上手方式。
+
+## 快速开始
+
+### 1. 准备 Python 环境
+
+仓库所有脚本均在 **Python 3.9** 下开发。可以通过 `conda` 或 `venv` 创建隔离环境，再依据需求安装依赖：
+
+```bash
+# 示例：使用 conda 创建环境
+conda create -n cv-safety python=3.9
+conda activate cv-safety
+
+# 安装实时姿态识别依赖
+pip install -r envs/webcam_pose_detection_requirements.txt
+
+# 或安装文物保护子系统依赖
+pip install -r envs/object_protection_requirements.txt
+```
+
+`envs/example_human_det_environments.yml` 提供了一个可导入的 Conda 环境描述，可用于一次性安装所有运行所需依赖。
+
+### 2. 下载模型文件
+
+- **姿态识别模型**：运行 `WebcamPoseDetection/download_model.py` 自动下载 `pose_landmarker_full.task` 到仓库根目录的 `models/` 文件夹。
+- **YOLOv7 权重**：`object_protection/video_relic_tracking.py` 在首次运行时会尝试下载 `yolov7-tiny.pt`。如果无法联网，请手动放置文件并更新脚本中的路径。
+
+### 3. 运行示例脚本
+
+```bash
+# 启动最简姿态识别（默认摄像头）
+python WebcamPoseDetection/webcam_pose_minimal.py
+
+# 启动带 FPS 统计的姿态识别
+python WebcamPoseDetection/webcam_pose_simple.py
+
+# 启动文物检测与跟踪（摄像头）
+python object_protection/video_relic_tracking.py --source 0
+
+# 启动文物安全联动监控（摄像头）
+python object_protection/integrated_safety_monitor.py --source 0
+```
+
+详细参数说明请查阅各模块文档。
+
+## 目录概览
+
+```
+cv_safety_sys/
+├── WebcamPoseDetection/       # 姿态识别子系统
+│   ├── download_model.py
+│   ├── pose33_realtime_optimized.py
+│   ├── webcam_pose_minimal.py
+│   └── webcam_pose_simple.py
+├── object_protection/         # 文物检测与安全联动
+│   ├── integrated_safety_monitor.py
+│   ├── video_relic_tracking.py
+│   ├── general.py
+│   └── yolov7-tiny.pt (可选，首次运行会下载)
+├── docs/                      # 详细说明文档
+└── envs/                      # 依赖与环境配置文件
+```
+
+## 文档与使用说明
+
+- `docs/webcam_pose_detection.md` – 姿态识别功能简介、安装与运行说明。
+- `docs/webcam_pose_detection_structure.md` – 姿态识别目录结构与代码导读。
+- `docs/object_protection.md` – 文物检测、跟踪及安全联动功能说明。
+- `docs/exam_doc.md` – 系统整体概览与演示 checklist。
+
+欢迎在对应模块的文档中查看更多操作细节与故障排查建议。
+
+## 环境与依赖
+
+仓库中的环境文件遵循以下约定：
+
+- `envs/webcam_pose_detection_requirements.txt` – 最小化的 MediaPipe 姿态识别依赖。
+- `envs/object_protection_requirements.txt` – 含 GPU 支持的完整文物保护依赖，适合生产部署。
+- `envs/object_protection_requirements_minimal.txt` – 仅供运行 `video_relic_tracking.py` 的轻量依赖组合。
+- `envs/example_human_det_environments.yml` – 统一的 Conda 环境描述，便于一键复现全部功能。
+
+若需新增依赖，请同步更新相应文件并在文档中注明用途。
+
+## 贡献指南
+
+1. 为每个子模块使用独立分支进行开发，避免直接推送到 `main`。
+2. 新增或修改脚本时，请在 `docs/` 中补充对应使用说明。
+3. 不要向仓库提交体积较大的模型权重或中间结果，可将其加入 `.gitignore`。
+4. 在提交前运行相关脚本或测试，确保核心功能可用。
+
+祝你探索顺利，也欢迎补充更多安全场景的子系统。

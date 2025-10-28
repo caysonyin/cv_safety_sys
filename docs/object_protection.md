@@ -1,76 +1,69 @@
-# 文物检测与跟踪系统
+# 文物检测、跟踪与安全联动系统
 
-基于YOLOv7-tiny的实时文物检测、选择和跟踪系统。
+该子系统以 YOLOv7-tiny 为基础，实现了从单纯的文物检测、目标跟踪到联合姿态识别的安全预警流程。
 
-## 📁 项目结构
+## 目录概览
 
 ```
 object_protection/
-├── video_relic_tracking.py       # 主程序：视频文物跟踪
-├── yolov7/                       # YOLOv7框架（需单独下载）
-└── ...
-
-envs/
-├── object_protection_requirements.txt          # 完整依赖包
-└── object_protection_requirements_minimal.txt  # 最小依赖包
+├── video_relic_tracking.py       # YOLOv7 文物检测 + 交互式跟踪
+├── integrated_safety_monitor.py  # 文物检测 × 人体姿态 × 危险物联动
+├── general.py                    # YOLO/YOLOR 通用工具函数（精简版）
+├── yolov7-tiny.pt                # 预训练权重（首次运行可自动下载）
+└── yolov7/                       # 官方 YOLOv7 仓库（需单独克隆或下载）
 ```
 
-## 🚀 快速开始
+## 环境准备
 
-### 1. 安装依赖
+1. 创建 Python 3.9 虚拟环境。
+2. 按需安装依赖：
+   ```bash
+   # 完整依赖（含 Mediapipe，用于联动监控）
+   pip install -r envs/object_protection_requirements.txt
 
+   # 仅运行 video_relic_tracking 的最小依赖
+   pip install -r envs/object_protection_requirements_minimal.txt
+   ```
+3. 根据网络情况准备权重：
+   - 首次运行 `video_relic_tracking.py` 或 `integrated_safety_monitor.py` 时会尝试下载 `yolov7-tiny.pt` 至当前目录。
+   - 若下载失败，可从官方渠道获取后放置在 `object_protection/` 目录，并确保脚本中的路径正确。
+
+## 核心脚本
+
+### `video_relic_tracking.py`
+- 通过 YOLOv7-tiny 进行实时检测，支持摄像头和视频文件输入。
+- 鼠标点击即可选中/取消文物目标，按 `Enter` 确认，`ESC` 退出，`S` 保存当前帧。
+- 内置基于质心距离的 `SimpleTracker`，可保持目标 ID。
+- 提供电子围栏判定与文物重要性评分示例，便于扩展到安全策略。
+
+常用命令：
 ```bash
-# 完整版本（推荐）
-pip install -r envs/object_protection_requirements.txt
+# 默认摄像头
+python object_protection/video_relic_tracking.py --source 0
 
-# 或最小版本
-pip install -r envs/object_protection_requirements_minimal.txt
+# 指定视频文件 + 自定义置信度阈值
+python object_protection/video_relic_tracking.py --source museum.mp4 --conf 0.25
 ```
 
-### 2. 运行程序
+### `integrated_safety_monitor.py`
+- 在文物检测基础上引入人体姿态识别与危险物品检测。
+- 通过 `PoseLandmarkHelper` 复用 MediaPipe 模型，判断人员是否靠近文物或持有危险物体。
+- 支持告警历史记录、危险区域标记以及多目标跟踪。
+- 适合作为文物安全演示或进一步产品化的参考实现。
 
-```bash
-# 使用摄像头（默认）
-python video_relic_tracking.py --source 0
+运行前需确保已下载姿态模型（参见 `WebcamPoseDetection/download_model.py`）。
 
-# 使用视频文件
-python video_relic_tracking.py --source "video.mp4"
+## 常见问题
 
-# 调整检测阈值
-python video_relic_tracking.py --source 0 --conf 0.1
-```
+| 问题 | 处理建议 |
+| --- | --- |
+| GPU 推理报错 | 确认 CUDA 与 PyTorch 版本匹配，必要时改用 CPU。 |
+| `yolov7` 模块找不到 | 在仓库根目录克隆 `https://github.com/WongKinYiu/yolov7`，或将其加入 `PYTHONPATH`。 |
+| 帧率过低 | 调整 `--img` 参数降低输入分辨率，或减少电子围栏数量。 |
+| Mediapipe 未安装 | 若运行联动监控，请使用完整依赖文件重新安装。 |
 
-## 🎯 功能特性
+## 延伸阅读
 
-- ✅ 实时文物检测
-- ✅ 交互式文物选择
-- ✅ 目标跟踪（保持ID）
-- ✅ 电子栅栏保护
-- ✅ 支持摄像头和视频文件
-
-## 🎮 操作说明
-
-1. **点击红色框** - 选择文物
-2. **点击绿色框** - 取消选择
-3. **按Enter键** - 确认选择
-4. **按ESC键** - 退出程序
-5. **按S键** - 保存当前帧
-
-## 📋 系统要求
-
-- Python 3.7+
-- CUDA支持（可选，用于GPU加速）
-- 摄像头或视频文件
-
-## 🔧 依赖包说明
-
-### 核心依赖
-- `torch` - PyTorch深度学习框架
-- `opencv-python` - 计算机视觉处理
-- `numpy` - 数值计算
-- `requests` - 网络请求
-
-### 可选依赖
-- `matplotlib` - 可视化
-- `tqdm` - 进度条
-- `psutil` - 系统监控
+- `docs/webcam_pose_detection.md`：姿态识别模块说明。
+- `envs/object_protection_requirements*.txt`：不同粒度的依赖列表。
+- `README.md`：仓库顶层概览与快速上手。

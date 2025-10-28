@@ -11,13 +11,13 @@
 - `pose33_realtime_optimized.py` - 完整优化版本，支持高级功能
 
 ### 依赖文件
-- `requirements.txt` - Python依赖包列表
+- `envs/webcam_pose_detection_requirements.txt` - Python依赖包列表
 - `models/pose_landmarker_full.task` - MediaPipe姿态检测模型（需要下载）
 
 ## 安装依赖
 
 ```bash
-pip install -r requirements.txt
+pip install -r envs/webcam_pose_detection_requirements.txt
 ```
 
 ## 使用方法

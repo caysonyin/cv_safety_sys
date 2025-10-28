@@ -6,11 +6,13 @@
 
 ```
 object_protection/
-├── video_relic_tracking.py    # 主程序：视频文物跟踪
-├── yolov7/                    # YOLOv7框架
-├── requirements.txt           # 完整依赖包
-├── requirements_minimal.txt   # 最小依赖包
-└── README.md                  # 项目说明
+├── video_relic_tracking.py       # 主程序：视频文物跟踪
+├── yolov7/                       # YOLOv7框架（需单独下载）
+└── ...
+
+envs/
+├── object_protection_requirements.txt          # 完整依赖包
+└── object_protection_requirements_minimal.txt  # 最小依赖包
 ```
 
 ## 🚀 快速开始
@@ -19,10 +21,10 @@ object_protection/
 
 ```bash
 # 完整版本（推荐）
-pip install -r requirements.txt
+pip install -r envs/object_protection_requirements.txt
 
 # 或最小版本
-pip install -r requirements_minimal.txt
+pip install -r envs/object_protection_requirements_minimal.txt
 ```
 
 ### 2. 运行程序

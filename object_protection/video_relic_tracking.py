@@ -137,14 +137,24 @@ class SimpleTracker:
         return self.objects
 
 class VideoRelicTracker:
-    def __init__(self, model, device, confidence_threshold: float = 0.1):
+    def __init__(
+        self,
+        model,
+        device,
+        confidence_threshold: float = 0.1,
+        window_name: Optional[str] = None,
+    ):
         self.model = model
         self.device = device
         self.tracker = SimpleTracker(max_disappeared=10)
         self.selected_relics = set()  # 选中的文物ID
         self.relic_detections = []  # 当前帧的文物检测结果
         self.tracked_objects = {}  # 跟踪的目标
-        self.window_name = "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
+        self.window_name = (
+            window_name
+            if window_name is not None
+            else "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
+        )
         self.confidence_threshold = confidence_threshold
 
         # 创建窗口
@@ -223,40 +233,33 @@ class VideoRelicTracker:
                 return detection.get('track_id', None)
         return None
     
-    def detect_relics(self, frame):
-        """检测文物"""
-        h, w = frame.shape[:2]
-        
-        # 分析图片特征
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        bronze_mask = cv2.inRange(hsv, np.array([10, 50, 50]), np.array([30, 255, 255]))
-        bronze_ratio = float(np.count_nonzero(bronze_mask)) / (h * w)
-
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = float(np.count_nonzero(edges)) / (h * w)
-
-        # 预处理 + 推理
+    def _detect_all_objects(self, frame: np.ndarray) -> List[Dict[str, object]]:
+        """运行一次YOLO检测并返回所有检测结果。"""
         image_tensor = self._prepare_image(frame)
+
         with torch.no_grad():
             predictions = self.model(image_tensor)
 
         if isinstance(predictions, (tuple, list)):
             predictions = predictions[0]
 
-        predictions = non_max_suppression(predictions, conf_thres=self.confidence_threshold)
+        detections = non_max_suppression(
+            predictions,
+            conf_thres=self.confidence_threshold,
+        )
 
-        relic_detections: List[Dict[str, object]] = []
-        detections_tensor = predictions[0]
+        detections_tensor = detections[0]
         if detections_tensor is None or len(detections_tensor) == 0:
-            return relic_detections
+            return []
 
+        detections_tensor = detections_tensor.clone()
         detections_tensor[:, :4] = scale_coords(
             image_tensor.shape[2:],
             detections_tensor[:, :4],
-            frame.shape
+            frame.shape,
         ).round()
 
+        all_detections: List[Dict[str, object]] = []
         for *xyxy, conf, cls in detections_tensor:
             class_id = int(cls)
             confidence = float(conf)
@@ -267,10 +270,48 @@ class VideoRelicTracker:
             else:
                 class_name = f'class_{class_id}'
 
+            all_detections.append(
+                {
+                    'bbox': [x1, y1, x2, y2],
+                    'confidence': confidence,
+                    'class_id': class_id,
+                    'class_name': class_name,
+                    'area': max(0, (x2 - x1) * (y2 - y1)),
+                }
+            )
+
+        return all_detections
+
+    def detect_relics(
+        self,
+        frame: np.ndarray,
+        detections: Optional[Sequence[Dict[str, object]]] = None,
+    ) -> List[Dict[str, object]]:
+        """检测文物"""
+        h, w = frame.shape[:2]
+
+        # 分析图片特征
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        bronze_mask = cv2.inRange(hsv, np.array([10, 50, 50]), np.array([30, 255, 255]))
+        bronze_ratio = float(np.count_nonzero(bronze_mask)) / (h * w)
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = float(np.count_nonzero(edges)) / (h * w)
+
+        relic_detections: List[Dict[str, object]] = []
+        if detections is None:
+            detections = self._detect_all_objects(frame)
+
+        for detection in detections:
+            class_name = str(detection['class_name'])
             if class_name in EXCLUDED_CLASSES:
                 continue
 
-            bbox_area = max(0, (x2 - x1) * (y2 - y1))
+            class_id = int(detection['class_id'])
+            confidence = float(detection['confidence'])
+            x1, y1, x2, y2 = map(int, detection['bbox'])
+            bbox_area = float(detection.get('area', max(0, (x2 - x1) * (y2 - y1))))
             score = self._calculate_antiquity_score(
                 area=bbox_area,
                 confidence=confidence,
@@ -417,8 +458,9 @@ class VideoRelicTracker:
             frame_count += 1
             
             # 检测文物
-            self.relic_detections = self.detect_relics(frame)
-            
+            all_detections = self._detect_all_objects(frame)
+            self.relic_detections = self.detect_relics(frame, all_detections)
+
             # 更新跟踪
             self.update_tracking(self.relic_detections)
             

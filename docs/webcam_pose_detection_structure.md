@@ -3,16 +3,21 @@
 ## 文件夹结构
 ```
 WebcamPoseDetection/
-├── webcam_pose_minimal.py      # 最简化版本（推荐使用）
-├── webcam_pose_simple.py       # 简化版本（带性能监控）
+├── webcam_pose_minimal.py       # 最简化版本（推荐使用）
+├── webcam_pose_simple.py        # 简化版本（带性能监控）
 ├── pose33_realtime_optimized.py # 完整优化版本
-├── download_model.py           # 模型下载脚本
-├── test_setup.py              # 环境测试脚本
-├── run_webcam.bat             # Windows启动脚本
-├── requirements.txt           # Python依赖包
-├── README.md                 # 项目说明文档
-├── .gitignore               # Git忽略文件
-└── PROJECT_STRUCTURE.md     # 本文件
+├── download_model.py            # 模型下载脚本
+├── test_setup.py               # 环境测试脚本
+├── run_webcam.bat              # Windows启动脚本
+├── .gitignore                  # Git忽略文件
+└── ...
+
+envs/
+└── webcam_pose_detection_requirements.txt  # Python依赖包
+
+docs/
+├── webcam_pose_detection.md               # 项目说明文档
+└── webcam_pose_detection_structure.md     # 本文件
 ```
 
 ## 文件功能说明
@@ -52,13 +57,13 @@ WebcamPoseDetection/
    - 提供选择菜单
    - 简化使用流程
 
-### 配置文件
-7. **requirements.txt**
+### 配置文件与文档
+7. **envs/webcam_pose_detection_requirements.txt**
    - Python依赖包列表
    - 版本要求说明
    - 便于环境复现
 
-8. **README.md**
+8. **docs/webcam_pose_detection.md**
    - 详细使用说明
    - 功能特点介绍
    - 故障排除指南

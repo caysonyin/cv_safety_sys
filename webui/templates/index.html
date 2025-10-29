@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文物检测与跟踪系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>文物检测与跟踪系统</h1>
+            <div class="status-bar">
+                <span id="status">未启动</span>
+                <span id="fps">FPS:</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <img id="video-stream" src="" alt="视频流">
+                    <div class="video-overlay" id="video-overlay"></div>
+                </div>
+                
+                <div class="controls">
+                    <div class="source-selector">
+                        <label>
+                            <input type="radio" name="source-type" value="camera" checked>
+                            摄像头
+                        </label>
+                        <input type="number" id="camera-id" value="0" min="0" max="10" style="width: 60px;">
+                        
+                        <label style="margin-left: 20px;">
+                            <input type="radio" name="source-type" value="video">
+                            视频文件
+                        </label>
+                        <input type="text" id="video-path" placeholder="视频文件路径或URL" style="width: 300px;">
+                    </div>
+                    
+                    <div class="button-group">
+                        <button id="btn-start" class="btn btn-primary">启动检测</button>
+                        <button id="btn-stop" class="btn btn-secondary" disabled>停止检测</button>
+                        <button id="btn-clear" class="btn btn-warning">清除选择</button>
+                        <button id="btn-screenshot" class="btn btn-info">截图</button>
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <div class="info-item">
+                        <span class="label">检测到的文物:</span>
+                        <span id="total-relics" class="value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">已选择:</span>
+                        <span id="selected-count" class="value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h3>检测到的文物</h3>
+                    <div id="relic-list" class="relic-list">
+                        <div class="empty-state">等待检测启动...</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>报警信息</h3>
+                    <div id="alert-list" class="alert-list">
+                        <div class="empty-state">暂无报警</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+*.mp4
+*.avi
+*.mov
+*.mkv
+test_video.*
+screenshot_*.jpg
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.vscode/
+.idea/

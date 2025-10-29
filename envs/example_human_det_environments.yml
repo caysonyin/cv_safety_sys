@@ -1,0 +1,23 @@
+name: cv-safety
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pytorch>=1.13
+  - torchvision>=0.14
+  - cudatoolkit=11.7    # 若仅使用 CPU，可在创建时移除此行
+  - pip:
+      - mediapipe>=0.10.0
+      - opencv-python>=4.8.0
+      - numpy>=1.21.0,<1.24.0
+      - Pillow>=7.1.2
+      - requests>=2.23.0
+      - PyYAML>=5.3.1
+      - scipy>=1.4.1
+      - tqdm>=4.41.0
+      - protobuf<4.21.3
+      - matplotlib>=3.2.2
+      - psutil
+      - thop

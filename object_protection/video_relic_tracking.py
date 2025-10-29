@@ -5,40 +5,68 @@
 实时检测、选择和跟踪文物，保持目标ID
 """
 
-import os
-import cv2
-import torch
-import numpy as np
-from pathlib import Path
 import sys
-import json
-from datetime import datetime
 import time
-from collections import defaultdict
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence, Tuple
+
+import cv2
+import numpy as np
+import torch
 
 # 添加yolov7目录到Python路径
 sys.path.append('yolov7')
 
+try:  # 优先使用本地yolov7工具函数
+    from utils.general import non_max_suppression, scale_coords
+except ModuleNotFoundError:  # pragma: no cover - 兼容子目录结构
+    from yolov7.utils.general import non_max_suppression, scale_coords  # type: ignore
+
+
+CLASS_NAMES: Tuple[str, ...] = (
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
+    'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat',
+    'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
+    'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+    'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake',
+    'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
+    'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
+    'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+)
+
+EXCLUDED_CLASSES = {
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
+    'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'tv', 'laptop', 'mouse',
+    'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
+    'hair drier', 'toothbrush'
+}
+
+HIGH_ANTIQUITY_CLASSES = {'bottle', 'wine glass', 'cup', 'bowl', 'vase', 'book', 'clock', 'scissors'}
+MEDIUM_ANTIQUITY_CLASSES = {'teddy bear', 'potted plant'}
+
 class SimpleTracker:
-    """简单的目标跟踪器，基于位置和尺寸"""
-    
-    def __init__(self, max_disappeared=10):
+    """简单的目标跟踪器，基于质心距离的贪心匹配。"""
+
+    def __init__(self, max_disappeared: int = 10, max_distance: float = 100.0):
         self.next_object_id = 0
-        self.objects = {}
-        self.disappeared = {}
+        self.objects: Dict[int, Dict[str, object]] = {}
+        self.disappeared: Dict[int, int] = {}
         self.max_disappeared = max_disappeared
-        
+        self.max_distance = max_distance
+
     def register(self, centroid, bbox):
         """注册新目标"""
         self.objects[self.next_object_id] = {
-            'centroid': centroid,
-            'bbox': bbox,
+            'centroid': tuple(centroid),
+            'bbox': list(bbox),
             'last_seen': time.time()
         }
         self.disappeared[self.next_object_id] = 0
         self.next_object_id += 1
         return self.next_object_id - 1
-    
+
     def deregister(self, object_id):
         """注销目标"""
         if object_id in self.objects:
@@ -46,88 +74,142 @@ class SimpleTracker:
         if object_id in self.disappeared:
             del self.disappeared[object_id]
     
-    def update(self, detections):
+    def update(self, detections: Sequence[Dict[str, object]]):
         """更新跟踪器"""
-        if len(detections) == 0:
+        if not detections:
             # 没有检测到目标，增加所有目标的消失计数
             for object_id in list(self.disappeared.keys()):
                 self.disappeared[object_id] += 1
                 if self.disappeared[object_id] > self.max_disappeared:
                     self.deregister(object_id)
             return self.objects
-        
-        # 计算检测框中心点
-        input_centroids = []
-        input_bboxes = []
-        for detection in detections:
-            x1, y1, x2, y2 = detection['bbox']
-            centroid = ((x1 + x2) / 2, (y1 + y2) / 2)
-            input_centroids.append(centroid)
-            input_bboxes.append(detection['bbox'])
-        
-        # 如果没有现有目标，注册所有检测到的目标
-        if len(self.objects) == 0:
-            for i in range(len(detections)):
-                self.register(input_centroids[i], input_bboxes[i])
-        else:
-            # 计算现有目标和新检测之间的距离
-            object_centroids = [self.objects[obj_id]['centroid'] for obj_id in self.objects.keys()]
-            object_ids = list(self.objects.keys())
-            
-            # 计算距离矩阵
-            D = np.linalg.norm(np.array(object_centroids)[:, np.newaxis] - np.array(input_centroids), axis=2)
-            
-            # 使用匈牙利算法匹配
-            rows = D.min(axis=1).argsort()
-            cols = D.argmin(axis=1)[rows]
-            
-            used_row_indices = set()
-            used_col_indices = set()
-            
-            # 更新匹配的目标
-            for (row, col) in zip(rows, cols):
-                if row in used_row_indices or col in used_col_indices:
-                    continue
-                
-                if D[row, col] < 100:  # 距离阈值
-                    object_id = object_ids[row]
-                    self.objects[object_id]['centroid'] = input_centroids[col]
-                    self.objects[object_id]['bbox'] = input_bboxes[col]
-                    self.objects[object_id]['last_seen'] = time.time()
-                    self.disappeared[object_id] = 0
-                    
-                    used_row_indices.add(row)
-                    used_col_indices.add(col)
-            
-            # 处理未匹配的现有目标
-            unused_row_indices = set(range(0, D.shape[0])).difference(used_row_indices)
-            for row in unused_row_indices:
-                object_id = object_ids[row]
-                self.disappeared[object_id] += 1
-                if self.disappeared[object_id] > self.max_disappeared:
-                    self.deregister(object_id)
-            
-            # 处理未匹配的新检测
-            unused_col_indices = set(range(0, D.shape[1])).difference(used_col_indices)
-            for col in unused_col_indices:
-                self.register(input_centroids[col], input_bboxes[col])
-        
+
+        input_bboxes = [list(det['bbox']) for det in detections]
+        input_centroids = np.array([
+            ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+            for bbox in input_bboxes
+        ], dtype=np.float32)
+
+        if not self.objects:
+            for centroid, bbox in zip(input_centroids, input_bboxes):
+                self.register(centroid, bbox)
+            return self.objects
+
+        object_ids = list(self.objects.keys())
+        object_centroids = np.array([
+            self.objects[obj_id]['centroid'] for obj_id in object_ids
+        ], dtype=np.float32)
+
+        distance_matrix = np.linalg.norm(
+            object_centroids[:, np.newaxis, :] - input_centroids[np.newaxis, :, :],
+            axis=2,
+        )
+
+        used_rows: set[int] = set()
+        used_cols: set[int] = set()
+
+        for row in np.argsort(distance_matrix.min(axis=1)):
+            col = distance_matrix[row].argmin()
+            if row in used_rows or col in used_cols:
+                continue
+            if distance_matrix[row, col] > self.max_distance:
+                continue
+
+            object_id = object_ids[row]
+            self.objects[object_id]['centroid'] = tuple(input_centroids[col])
+            self.objects[object_id]['bbox'] = input_bboxes[col]
+            self.objects[object_id]['last_seen'] = time.time()
+            self.disappeared[object_id] = 0
+            used_rows.add(row)
+            used_cols.add(col)
+
+        unused_rows = set(range(distance_matrix.shape[0])).difference(used_rows)
+        for row in unused_rows:
+            object_id = object_ids[row]
+            self.disappeared[object_id] += 1
+            if self.disappeared[object_id] > self.max_disappeared:
+                self.deregister(object_id)
+
+        unused_cols = set(range(distance_matrix.shape[1])).difference(used_cols)
+        for col in unused_cols:
+            self.register(input_centroids[col], input_bboxes[col])
+
         return self.objects
 
 class VideoRelicTracker:
-    def __init__(self, model, device):
+    def __init__(
+        self,
+        model,
+        device,
+        confidence_threshold: float = 0.1,
+        window_name: Optional[str] = None,
+    ):
         self.model = model
         self.device = device
         self.tracker = SimpleTracker(max_disappeared=10)
         self.selected_relics = set()  # 选中的文物ID
         self.relic_detections = []  # 当前帧的文物检测结果
         self.tracked_objects = {}  # 跟踪的目标
-        self.window_name = "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
-        
+        self.window_name = (
+            window_name
+            if window_name is not None
+            else "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
+        )
+        self.confidence_threshold = confidence_threshold
+
         # 创建窗口
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window_name, self.mouse_callback)
-        
+
+    def _prepare_image(self, frame: np.ndarray) -> torch.Tensor:
+        """预处理输入图像以便进行模型推理"""
+        resized = cv2.resize(frame, (640, 640))
+        rgb_image = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(rgb_image.astype(np.float32) / 255.0)
+        tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(self.device)
+        if self.device.type == 'cuda':
+            return tensor.half()
+        return tensor.float()
+
+    @staticmethod
+    def _calculate_antiquity_score(
+        *,
+        area: float,
+        confidence: float,
+        class_name: str,
+        bronze_ratio: float,
+        edge_density: float,
+    ) -> float:
+        score = 0.0
+
+        if area > 100000:
+            score += 0.8
+        elif area > 50000:
+            score += 0.6
+        elif area > 10000:
+            score += 0.4
+        else:
+            score += 0.3
+
+        if confidence > 0.8:
+            score += 0.3
+        elif confidence > 0.6:
+            score += 0.2
+        elif confidence > 0.4:
+            score += 0.1
+
+        if class_name in HIGH_ANTIQUITY_CLASSES:
+            score += 0.4
+        elif class_name in MEDIUM_ANTIQUITY_CLASSES:
+            score += 0.2
+        else:
+            score += 0.1
+
+        if bronze_ratio > 0.01 or edge_density > 0.05:
+            score += 0.3
+
+        return min(score, 1.0)
+
     def mouse_callback(self, event, x, y, flags, param):
         """鼠标回调函数"""
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -151,136 +233,105 @@ class VideoRelicTracker:
                 return detection.get('track_id', None)
         return None
     
-    def detect_relics(self, frame):
-        """检测文物"""
-        h, w = frame.shape[:2]
-        
-        # 分析图片特征
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        bronze_lower = np.array([10, 50, 50])
-        bronze_upper = np.array([30, 255, 255])
-        bronze_mask = cv2.inRange(hsv, bronze_lower, bronze_upper)
-        bronze_ratio = np.sum(bronze_mask > 0) / (h * w)
-        
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.sum(edges > 0) / (h * w)
-        
-        # 预处理
-        image = cv2.resize(frame, (640, 640))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = image.astype(np.float32) / 255.0
-        image = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(self.device)
-        image = image.half()
-        
-        # 推理
+    def _detect_all_objects(self, frame: np.ndarray) -> List[Dict[str, object]]:
+        """运行一次YOLO检测并返回所有检测结果。"""
+        image_tensor = self._prepare_image(frame)
+
         with torch.no_grad():
-            predictions = self.model(image)
-        
-        # 后处理
-        from utils.general import non_max_suppression, scale_coords
-        
-        if isinstance(predictions, tuple):
+            predictions = self.model(image_tensor)
+
+        if isinstance(predictions, (tuple, list)):
             predictions = predictions[0]
-        
-        predictions = non_max_suppression(predictions, conf_thres=0.1)
-        
-        # 获取所有检测结果
-        all_detections = []
-        if predictions[0] is not None:
-            predictions[0][:, :4] = scale_coords(
-                image.shape[2:], 
-                predictions[0][:, :4], 
-                frame.shape
-            ).round()
-            
-            for *xyxy, conf, cls in predictions[0]:
-                class_id = int(cls)
-                confidence = float(conf)
-                x1, y1, x2, y2 = map(int, xyxy)
-                
-                bbox_area = (x2 - x1) * (y2 - y1)
-                
-                detection = {
+
+        detections = non_max_suppression(
+            predictions,
+            conf_thres=self.confidence_threshold,
+        )
+
+        detections_tensor = detections[0]
+        if detections_tensor is None or len(detections_tensor) == 0:
+            return []
+
+        detections_tensor = detections_tensor.clone()
+        detections_tensor[:, :4] = scale_coords(
+            image_tensor.shape[2:],
+            detections_tensor[:, :4],
+            frame.shape,
+        ).round()
+
+        all_detections: List[Dict[str, object]] = []
+        for *xyxy, conf, cls in detections_tensor:
+            class_id = int(cls)
+            confidence = float(conf)
+            x1, y1, x2, y2 = map(int, xyxy)
+
+            if class_id < len(CLASS_NAMES):
+                class_name = CLASS_NAMES[class_id]
+            else:
+                class_name = f'class_{class_id}'
+
+            all_detections.append(
+                {
                     'bbox': [x1, y1, x2, y2],
                     'confidence': confidence,
                     'class_id': class_id,
-                    'area': bbox_area
+                    'class_name': class_name,
+                    'area': max(0, (x2 - x1) * (y2 - y1)),
                 }
-                all_detections.append(detection)
-        
-        # 文物筛选
-        relic_detections = []
-        class_names = [
-            'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
-            'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat',
-            'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
-            'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-            'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
-            'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
-            'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake',
-            'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop',
-            'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-            'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
-        ]
-        
-        for detection in all_detections:
-            class_id = detection['class_id']
-            confidence = detection['confidence']
-            area = detection['area']
-            
-            class_name = class_names[class_id] if class_id < len(class_names) else f'class_{class_id}'
-            
-            # 排除明显不是文物的类别
-            excluded_classes = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
-                              'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'tv', 'laptop', 'mouse',
-                              'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
-                              'hair drier', 'toothbrush']
-            
-            if class_name in excluded_classes:
+            )
+
+        return all_detections
+
+    def detect_relics(
+        self,
+        frame: np.ndarray,
+        detections: Optional[Sequence[Dict[str, object]]] = None,
+    ) -> List[Dict[str, object]]:
+        """检测文物"""
+        h, w = frame.shape[:2]
+
+        # 分析图片特征
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        bronze_mask = cv2.inRange(hsv, np.array([10, 50, 50]), np.array([30, 255, 255]))
+        bronze_ratio = float(np.count_nonzero(bronze_mask)) / (h * w)
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = float(np.count_nonzero(edges)) / (h * w)
+
+        relic_detections: List[Dict[str, object]] = []
+        if detections is None:
+            detections = self._detect_all_objects(frame)
+
+        for detection in detections:
+            class_name = str(detection['class_name'])
+            if class_name in EXCLUDED_CLASSES:
                 continue
-            
-            # 文物判断逻辑
-            antiquity_score = 0.0
-            
-            # 基于面积的文物可能性评分
-            if area > 100000:
-                antiquity_score += 0.8
-            elif area > 50000:
-                antiquity_score += 0.6
-            elif area > 10000:
-                antiquity_score += 0.4
-            else:
-                antiquity_score += 0.3
-            
-            # 基于置信度的文物可能性评分
-            if confidence > 0.8:
-                antiquity_score += 0.3
-            elif confidence > 0.6:
-                antiquity_score += 0.2
-            elif confidence > 0.4:
-                antiquity_score += 0.1
-            
-            # 基于类别的文物可能性评分
-            high_antiquity_classes = ['bottle', 'wine glass', 'cup', 'bowl', 'vase', 'book', 'clock', 'scissors']
-            medium_antiquity_classes = ['teddy bear', 'potted plant']
-            
-            if class_name in high_antiquity_classes:
-                antiquity_score += 0.4
-            elif class_name in medium_antiquity_classes:
-                antiquity_score += 0.2
-            else:
-                antiquity_score += 0.1
-            
-            # 基于图片特征的文物可能性评分
-            if bronze_ratio > 0.01 or edge_density > 0.05:
-                antiquity_score += 0.3
-            
-            # 综合判断
-            if antiquity_score >= 0.1:
-                detection['antiquity_score'] = antiquity_score
-                relic_detections.append(detection)
-        
+
+            class_id = int(detection['class_id'])
+            confidence = float(detection['confidence'])
+            x1, y1, x2, y2 = map(int, detection['bbox'])
+            bbox_area = float(detection.get('area', max(0, (x2 - x1) * (y2 - y1))))
+            score = self._calculate_antiquity_score(
+                area=bbox_area,
+                confidence=confidence,
+                class_name=class_name,
+                bronze_ratio=bronze_ratio,
+                edge_density=edge_density,
+            )
+
+            if score < 0.3:
+                continue
+
+            relic_detections.append({
+                'bbox': [x1, y1, x2, y2],
+                'confidence': confidence,
+                'class_id': class_id,
+                'class_name': class_name,
+                'area': bbox_area,
+                'antiquity_score': score,
+            })
+
         return relic_detections
     
     def update_tracking(self, detections):
@@ -288,23 +339,26 @@ class VideoRelicTracker:
         # 更新跟踪器
         self.tracked_objects = self.tracker.update(detections)
         
-        # 为检测结果分配跟踪ID
+        if not self.tracked_objects:
+            for detection in detections:
+                detection['track_id'] = None
+            return
+
+        tracked_ids = list(self.tracked_objects.keys())
+        tracked_centroids = np.array([
+            self.tracked_objects[track_id]['centroid'] for track_id in tracked_ids
+        ], dtype=np.float32)
+
         for detection in detections:
             x1, y1, x2, y2 = detection['bbox']
-            centroid = ((x1 + x2) / 2, (y1 + y2) / 2)
-            
-            # 查找最接近的跟踪目标
-            min_distance = float('inf')
-            best_track_id = None
-            
-            for track_id, obj in self.tracked_objects.items():
-                obj_centroid = obj['centroid']
-                distance = np.sqrt((centroid[0] - obj_centroid[0])**2 + (centroid[1] - obj_centroid[1])**2)
-                if distance < min_distance and distance < 50:  # 距离阈值
-                    min_distance = distance
-                    best_track_id = track_id
-            
-            detection['track_id'] = best_track_id
+            centroid = np.array([(x1 + x2) / 2, (y1 + y2) / 2], dtype=np.float32)
+            distances = np.linalg.norm(tracked_centroids - centroid, axis=1)
+
+            best_index = distances.argmin()
+            if distances[best_index] < 50:
+                detection['track_id'] = tracked_ids[best_index]
+            else:
+                detection['track_id'] = None
     
     def draw_detections(self, frame):
         """绘制检测结果"""
@@ -404,8 +458,9 @@ class VideoRelicTracker:
             frame_count += 1
             
             # 检测文物
-            self.relic_detections = self.detect_relics(frame)
-            
+            all_detections = self._detect_all_objects(frame)
+            self.relic_detections = self.detect_relics(frame, all_detections)
+
             # 更新跟踪
             self.update_tracking(self.relic_detections)
             
@@ -452,39 +507,42 @@ class VideoRelicTracker:
         cap.release()
         cv2.destroyAllWindows()
 
-def download_yolov7_tiny():
+def download_yolov7_tiny(destination: Path = Path("yolov7-tiny.pt")) -> Optional[Path]:
     """下载YOLOv7-tiny预训练模型"""
     model_url = "https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt"
-    model_path = "yolov7-tiny.pt"
-    
-    if os.path.exists(model_path):
-        print(f"模型文件已存在: {model_path}")
-        return model_path
-    
+
+    if destination.exists():
+        print(f"模型文件已存在: {destination}")
+        return destination
+
     print("正在下载YOLOv7-tiny模型...")
     try:
         import requests
-        response = requests.get(model_url, stream=True)
+
+        response = requests.get(model_url, stream=True, timeout=30)
         response.raise_for_status()
-        
-        with open(model_path, 'wb') as f:
+
+        with destination.open('wb') as file:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        print(f"模型下载完成: {model_path}")
-        return model_path
+                if not chunk:
+                    continue
+                file.write(chunk)
+
+        print(f"模型下载完成: {destination}")
+        return destination
     except Exception as e:
         print(f"下载模型失败: {e}")
         return None
 
-def load_model(model_path):
+def load_model(model_path: Path):
     """加载YOLOv7模型"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"使用设备: {device}")
-    
+
     try:
-        model = torch.load(model_path, map_location=device, weights_only=False)['model']
-        model.to(device).eval()
+        checkpoint = torch.load(model_path, map_location=device)
+        model = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
+        model = model.to(device).float().eval()
         print("模型加载成功")
         return model, device
     except Exception as e:
@@ -505,16 +563,16 @@ def main():
     
     # 下载模型
     model_path = download_yolov7_tiny()
-    if not model_path:
+    if model_path is None:
         return
-    
+
     # 加载模型
     model, device = load_model(model_path)
     if model is None:
         return
-    
+
     # 创建跟踪器
-    tracker = VideoRelicTracker(model, device)
+    tracker = VideoRelicTracker(model, device, confidence_threshold=args.conf)
     
     # 处理视频
     try:

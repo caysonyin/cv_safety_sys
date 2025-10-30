@@ -8,7 +8,6 @@ dependencies:
   - pip
   - pytorch>=1.13
   - torchvision>=0.14
-  - cudatoolkit=11.7    # 若仅使用 CPU，可在创建时移除此行
   - pip:
       - mediapipe>=0.10.0
       - opencv-python>=4.8.0

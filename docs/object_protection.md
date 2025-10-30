@@ -53,7 +53,7 @@ python object_protection/video_relic_tracking.py --source museum.mp4 --conf 0.25
 
 | 问题 | 处理建议 |
 | --- | --- |
-| GPU 推理报错 | 确认 CUDA 与 PyTorch 版本匹配，必要时改用 CPU。 |
+| 推理性能不足 | 确认使用统一的 CPU 依赖环境，必要时降低输入分辨率或帧率。 |
 | `yolov7` 模块找不到 | 在仓库根目录克隆 `https://github.com/WongKinYiu/yolov7`，或将其加入 `PYTHONPATH`。 |
 | 帧率过低 | 调整 `--img` 参数降低输入分辨率，或减少电子围栏数量。 |
 | Mediapipe 未安装 | 若运行联动监控，请使用完整依赖文件重新安装。 |

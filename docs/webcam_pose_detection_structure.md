@@ -6,7 +6,6 @@ WebcamPoseDetection/
 ├── pose33_realtime_optimized.py  # 多线程 + 队列优化的实时检测器
 ├── webcam_pose_minimal.py        # 极简示例脚本
 ├── webcam_pose_simple.py         # 面向扩展的类封装版本
-├── run_webcam.bat                # Windows 启动脚本（菜单式）
 ├── test_setup.py                 # 运行环境自检脚本
 └── __init__.py (若存在则用于包化)
 ```

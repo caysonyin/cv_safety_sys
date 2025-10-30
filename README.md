@@ -38,8 +38,7 @@ Each script accepts `--source` to select a camera index or video file. The first
 cv_safety_sys/
 ├── WebcamPoseDetection/       # Pose estimation subsystem
 ├── object_protection/         # Cup tracking and safety monitor
-├── docs/                      # Detailed subsystem documentation
-└── envs/                      # Optional environment descriptors
+└── docs/                      # Detailed subsystem documentation
 ```
 
 See the `docs/` directory for subsystem deep dives and implementation notes that correspond to the final configuration described above.

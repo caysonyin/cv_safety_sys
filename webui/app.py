@@ -1,8 +1,9 @@
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO, emit
+from stream_handler import IntegratedStreamHandler
 import cv2
 import time
-from stream_handler import RelicStreamHandler
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'cv_safety_sys_secret'
@@ -20,7 +21,7 @@ def generate_frames():
         return
     
     while handler.is_running:
-        frame, relic_list = handler.get_frame()
+        frame, status = handler.get_frame()
         if frame is None:
             break
         
@@ -32,8 +33,7 @@ def generate_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         
-        socketio.emit('relic_update', {'relics': relic_list}, broadcast=True)
-        
+        socketio.emit('data_update', status, broadcast=True)
         time.sleep(0.03)
 
 @app.route('/video_feed')
@@ -60,16 +60,16 @@ def start_detection():
         else:
             video_source = 0
         
-        if handler is None:
-            handler = RelicStreamHandler(video_source=video_source)
-        else:
-            handler.video_source = video_source
-            handler.is_video_file = isinstance(video_source, str)
-        
+        pose_model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                      'WebcamPoseDetection', 'models', 'pose_landmarker_full.task')
+        handler = IntegratedStreamHandler(video_source=video_source, pose_model_path=pose_model_path)
         handler.start_capture()
+        
         source_info = f"视频文件: {video_source}" if isinstance(video_source, str) else f"摄像头 {video_source}"
         return jsonify({'status': 'success', 'message': f'检测已启动 ({source_info})'})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/stop', methods=['POST'])
@@ -77,6 +77,7 @@ def stop_detection():
     global handler
     if handler:
         handler.stop_capture()
+        handler = None
     return jsonify({'status': 'success', 'message': '检测已停止'})
 
 @app.route('/api/toggle_selection', methods=['POST'])
@@ -111,12 +112,11 @@ def get_alerts():
 
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
     emit('status', {'message': '已连接到服务器'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print('Client disconnected')
+    pass
 
 @socketio.on('click_video')
 def handle_video_click(data):
@@ -141,6 +141,5 @@ def handle_video_click(data):
                 break
 
 if __name__ == '__main__':
-    print("文物检测与跟踪 WebUI")
-    print("Started on http://localhost:1145")
+    print("Test WebUI - http://localhost:1145")
     socketio.run(app, host='0.0.0.0', port=1145, debug=False)

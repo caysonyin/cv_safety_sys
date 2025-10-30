@@ -2,11 +2,12 @@ const socket = io();
 
 let isRunning = false;
 let relicData = [];
+let personData = [];
+let dangerData = [];
 let lastUpdateTime = Date.now();
 let frameCount = 0;
 
 const videoStream = document.getElementById('video-stream');
-const videoOverlay = document.getElementById('video-overlay');
 const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const btnClear = document.getElementById('btn-clear');
@@ -15,14 +16,17 @@ const statusEl = document.getElementById('status');
 const fpsEl = document.getElementById('fps');
 const totalRelicsEl = document.getElementById('total-relics');
 const selectedCountEl = document.getElementById('selected-count');
+const personCountEl = document.getElementById('person-count');
+const dangerCountEl = document.getElementById('danger-count');
 const relicListEl = document.getElementById('relic-list');
+const personListEl = document.getElementById('person-list');
 const alertListEl = document.getElementById('alert-list');
+const personPanel = document.getElementById('person-panel');
 
 btnStart.addEventListener('click', startDetection);
 btnStop.addEventListener('click', stopDetection);
 btnClear.addEventListener('click', clearSelection);
 btnScreenshot.addEventListener('click', takeScreenshot);
-
 videoStream.addEventListener('click', handleVideoClick);
 
 socket.on('connect', () => {
@@ -35,20 +39,23 @@ socket.on('disconnect', () => {
     updateStatus('连接断开', 'error');
 });
 
-socket.on('relic_update', (data) => {
+socket.on('data_update', (data) => {
     relicData = data.relics || [];
-    updateRelicList();
+    personData = data.persons || [];
+    dangerData = data.dangers || [];
+    updateAllLists();
     updateFPS();
 });
 
 socket.on('selection_changed', (data) => {
     console.log('Selection changed:', data);
-    updateRelicList();
+    updateAllLists();
 });
 
 async function startDetection() {
     try {
         const sourceType = document.querySelector('input[name="source-type"]:checked').value;
+        
         const requestData = {
             source_type: sourceType
         };
@@ -77,6 +84,7 @@ async function startDetection() {
             btnStart.disabled = true;
             btnStop.disabled = false;
             updateStatus('检测运行中', 'success');
+            personPanel.style.display = 'block';
             startAlertPolling();
         } else {
             alert('启动失败: ' + result.message);
@@ -152,6 +160,12 @@ function handleVideoClick(event) {
     socket.emit('click_video', {x: Math.round(x), y: Math.round(y)});
 }
 
+function updateAllLists() {
+    updateRelicList();
+    updatePersonList();
+    updateStats();
+}
+
 function updateRelicList() {
     if (relicData.length === 0) {
         relicListEl.innerHTML = '<div class="empty-state">未检测到文物</div>';
@@ -173,10 +187,40 @@ function updateRelicList() {
             </div>
             <div class="relic-info">
                 <span class="relic-class">${relic.class_name}</span>
-                ${relic.selected ? '<span class="badge-selected">✓ 已选择</span>' : ''}
+                ${relic.selected ? '<span class="badge-selected">已选择</span>' : ''}
             </div>
         </div>
     `).join('');
+}
+
+function updatePersonList() {
+    if (personData.length === 0) {
+        personListEl.innerHTML = '<div class="empty-state">未检测到人员</div>';
+        return;
+    }
+    
+    personListEl.innerHTML = personData.map(person => {
+        const riskClass = person.is_risky ? 'person-risky' : '';
+        const poseIcon = person.has_pose ? '(P)' : '';
+        return `
+            <div class="person-item ${riskClass}">
+                <div class="person-header">
+                    <span class="person-id">人员 ${person.track_id || '?'} ${poseIcon}</span>
+                    ${person.is_risky ? '<span class="badge-danger">风险</span>' : ''}
+                </div>
+                ${person.risk_messages.length > 0 ? `
+                    <div class="person-risks">
+                        ${person.risk_messages.map(msg => `<div class="risk-msg">${msg}</div>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function updateStats() {
+    personCountEl.textContent = personData.length;
+    dangerCountEl.textContent = dangerData.length;
 }
 
 async function toggleRelicSelection(trackId) {
@@ -232,9 +276,10 @@ function updateAlertList(alerts) {
     
     alertListEl.innerHTML = recentAlerts.map(alert => {
         const time = new Date(alert.timestamp * 1000).toLocaleTimeString('zh-CN');
+        const typeIcon = alert.type === 'danger' ? '[!]' : '[X]';
         return `
             <div class="alert-item">
-                <div class="alert-time">${time}</div>
+                <div class="alert-time">${time} ${typeIcon}</div>
                 <div class="alert-message">${alert.message}</div>
             </div>
         `;

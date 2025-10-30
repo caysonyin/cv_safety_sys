@@ -17,9 +17,9 @@
 
 ## 环境准备
 
-1. 创建 Python 3.9 环境并安装依赖：
+1. 创建 Python 3.9 环境并安装统一依赖：
    ```bash
-   pip install -r envs/webcam_pose_detection_requirements.txt
+   pip install -r requirements.txt
    ```
 2. 下载模型：
    ```bash
@@ -38,6 +38,8 @@
 | 高性能需求 | `python WebcamPoseDetection/pose33_realtime_optimized.py --webcam` | 队列 + 后台线程优化，适用对延迟敏感的场景。 |
 
 程序启动后将打开默认摄像头，按 `q` 键即可退出。
+
+> **同时运行提示**：脚本均支持 `--source` 参数，可指定摄像头索引或视频文件路径，便于与文物保护模块并行运行时分配不同输入源。
 
 ## 关键特性
 

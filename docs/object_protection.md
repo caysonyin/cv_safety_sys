@@ -16,13 +16,9 @@ object_protection/
 ## 环境准备
 
 1. 创建 Python 3.9 虚拟环境。
-2. 按需安装依赖：
+2. 安装统一依赖（同时覆盖检测、姿态与联动功能）：
    ```bash
-   # 完整依赖（含 Mediapipe，用于联动监控）
-   pip install -r envs/object_protection_requirements.txt
-
-   # 仅运行 video_relic_tracking 的最小依赖
-   pip install -r envs/object_protection_requirements_minimal.txt
+   pip install -r requirements.txt
    ```
 3. 根据网络情况准备权重：
    - 首次运行 `video_relic_tracking.py` 或 `integrated_safety_monitor.py` 时会尝试下载 `yolov7-tiny.pt` 至当前目录。
@@ -57,7 +53,7 @@ python object_protection/video_relic_tracking.py --source museum.mp4 --conf 0.25
 
 | 问题 | 处理建议 |
 | --- | --- |
-| GPU 推理报错 | 确认 CUDA 与 PyTorch 版本匹配，必要时改用 CPU。 |
+| 推理性能不足 | 确认使用统一的 CPU 依赖环境，必要时降低输入分辨率或帧率。 |
 | `yolov7` 模块找不到 | 在仓库根目录克隆 `https://github.com/WongKinYiu/yolov7`，或将其加入 `PYTHONPATH`。 |
 | 帧率过低 | 调整 `--img` 参数降低输入分辨率，或减少电子围栏数量。 |
 | Mediapipe 未安装 | 若运行联动监控，请使用完整依赖文件重新安装。 |
@@ -65,5 +61,4 @@ python object_protection/video_relic_tracking.py --source museum.mp4 --conf 0.25
 ## 延伸阅读
 
 - `docs/webcam_pose_detection.md`：姿态识别模块说明。
-- `envs/object_protection_requirements*.txt`：不同粒度的依赖列表。
 - `README.md`：仓库顶层概览与快速上手。

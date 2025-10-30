@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-简化的实时摄像头33关节姿态检测
-只包含核心功能，去除复杂配置
-"""
+"""简化的实时摄像头 33 关节姿态检测。"""
 
+import argparse
 import os
 import time
+from typing import Union
+
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -93,21 +93,21 @@ class SimpleWebcamPoseDetector:
         return annotated
 
 
-def run_webcam_pose():
+def run_webcam_pose(video_source: Union[int, str] = 0, window_name: str = "实时姿态检测"):
     """运行实时摄像头姿态检测"""
     print("启动实时摄像头姿态检测...")
     print("按 'q' 键退出")
-    
-    # 打开摄像头
-    cap = cv2.VideoCapture(0)
+
+    cap = cv2.VideoCapture(video_source)
     if not cap.isOpened():
-        print("无法打开摄像头")
+        print(f"无法打开视频源: {video_source}")
         return
-    
+
     # 设置摄像头参数
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_FPS, 30)
+    if isinstance(video_source, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 30)
     
     # 创建检测器
     try:
@@ -139,12 +139,12 @@ def run_webcam_pose():
                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # 显示结果
-            cv2.imshow('实时姿态检测', annotated_frame)
-            
+            cv2.imshow(window_name, annotated_frame)
+
             # 按'q'退出
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-    
+
     finally:
         # 清理资源
         cap.release()
@@ -155,8 +155,33 @@ def run_webcam_pose():
     print(f"\n处理完成!")
     print(f"总帧数: {frame_count}")
     print(f"总时间: {total_time:.2f}秒")
-    print(f"平均FPS: {frame_count / total_time:.2f}")
+    if total_time > 0:
+        print(f"平均FPS: {frame_count / total_time:.2f}")
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="实时姿态检测示例")
+    parser.add_argument(
+        "--source",
+        default="0",
+        help="视频源 (摄像头索引或视频文件路径)",
+    )
+    parser.add_argument(
+        "--window-name",
+        default="实时姿态检测",
+        help="OpenCV 显示窗口名称",
+    )
+    return parser.parse_args()
+
+
+def _coerce_source(value: str) -> Union[int, str]:
+    value = value.strip()
+    return int(value) if value.lstrip("-").isdigit() else value
 
 
 if __name__ == "__main__":
-    run_webcam_pose()
+    args = _parse_args()
+    run_webcam_pose(
+        video_source=_coerce_source(str(args.source)),
+        window_name=args.window_name,
+    )

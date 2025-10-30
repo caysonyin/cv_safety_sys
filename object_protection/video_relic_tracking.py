@@ -166,10 +166,8 @@ class VideoRelicTracker:
         resized = cv2.resize(frame, (640, 640))
         rgb_image = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         tensor = torch.from_numpy(rgb_image.astype(np.float32) / 255.0)
-        tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(self.device)
-        if self.device.type == 'cuda':
-            return tensor.half()
-        return tensor.float()
+        tensor = tensor.permute(2, 0, 1).unsqueeze(0)
+        return tensor.to(self.device).float()
 
     @staticmethod
     def _calculate_antiquity_score(
@@ -535,9 +533,9 @@ def download_yolov7_tiny(destination: Path = Path("yolov7-tiny.pt")) -> Optional
         return None
 
 def load_model(model_path: Path):
-    """加载YOLOv7模型"""
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"使用设备: {device}")
+    """加载YOLOv7模型（仅 CPU）"""
+    device = torch.device('cpu')
+    print("使用设备: CPU")
 
     try:
         checkpoint = torch.load(model_path, map_location=device)

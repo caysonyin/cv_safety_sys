@@ -11,21 +11,18 @@
 
 ### 1. 准备 Python 环境
 
-仓库所有脚本均在 **Python 3.9** 下开发。可以通过 `conda` 或 `venv` 创建隔离环境，再依据需求安装依赖：
+仓库所有脚本均在 **Python 3.9** 下开发，并已在 **Ubuntu 22.04 + CPU** 环境完成验证。建议通过 `conda` 或 `venv` 创建隔离环境，再安装统一的依赖集合：
 
 ```bash
 # 示例：使用 conda 创建环境
 conda create -n cv-safety python=3.9
 conda activate cv-safety
 
-# 安装实时姿态识别依赖
-pip install -r envs/webcam_pose_detection_requirements.txt
-
-# 或安装文物保护子系统依赖
-pip install -r envs/object_protection_requirements.txt
+# 安装统一依赖（同时支持姿态识别与文物保护脚本）
+pip install -r requirements.txt
 ```
 
-`envs/example_human_det_environments.yml` 提供了一个可导入的 Conda 环境描述，可用于一次性安装所有运行所需依赖。
+`envs/example_human_det_environments.yml` 仍然提供了一个可导入的 Conda 环境描述，其内容与 `requirements.txt` 保持一致，可用于一次性安装所有运行所需依赖。
 
 ### 2. 下载模型文件
 
@@ -49,6 +46,8 @@ python object_protection/integrated_safety_monitor.py --source 0
 ```
 
 详细参数说明请查阅各模块文档。
+
+> **提示**：所有实时脚本均支持 `--source`（摄像头索引或视频文件）参数，可在同一环境下为两个子系统指定不同输入源，实现可视化的同时运行。
 
 ## 目录概览
 
@@ -79,14 +78,10 @@ cv_safety_sys/
 
 ## 环境与依赖
 
-仓库中的环境文件遵循以下约定：
+- `requirements.txt` – 统一的依赖列表，覆盖姿态识别与文物保护两个子系统。
+- `envs/example_human_det_environments.yml` – Conda 环境描述，使用 `requirements.txt` 中的同一套依赖。
 
-- `envs/webcam_pose_detection_requirements.txt` – 最小化的 MediaPipe 姿态识别依赖。
-- `envs/object_protection_requirements.txt` – 含 GPU 支持的完整文物保护依赖，适合生产部署。
-- `envs/object_protection_requirements_minimal.txt` – 仅供运行 `video_relic_tracking.py` 的轻量依赖组合。
-- `envs/example_human_det_environments.yml` – 统一的 Conda 环境描述，便于一键复现全部功能。
-
-若需新增依赖，请同步更新相应文件并在文档中注明用途。
+若需新增依赖，请同步更新上述文件并在文档中注明用途。
 
 ## 贡献指南
 

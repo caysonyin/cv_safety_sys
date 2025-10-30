@@ -6,7 +6,6 @@ WebcamPoseDetection/
 ├── pose33_realtime_optimized.py  # 多线程 + 队列优化的实时检测器
 ├── webcam_pose_minimal.py        # 极简示例脚本
 ├── webcam_pose_simple.py         # 面向扩展的类封装版本
-├── run_webcam.bat                # Windows 启动脚本（菜单式）
 ├── test_setup.py                 # 运行环境自检脚本
 └── __init__.py (若存在则用于包化)
 ```
@@ -38,6 +37,6 @@ WebcamPoseDetection/
 ## 与其他子系统的关系
 
 - `object_protection/integrated_safety_monitor.py` 通过导入 `download_model.py` 获取模型路径，并在安全联动场景中复用姿态检测能力。
-- 环境依赖与该模块共享 `envs/webcam_pose_detection_requirements.txt` 配置。
+- 环境依赖与其他子系统统一在仓库根目录的 `requirements.txt` 中维护。
 
 了解以上结构，有助于快速定位需要修改或复用的脚本位置。

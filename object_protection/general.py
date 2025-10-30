@@ -4,7 +4,6 @@ import glob
 import logging
 import math
 import os
-import platform
 import random
 import re
 import subprocess
@@ -55,8 +54,8 @@ def isdocker():
 
 
 def emojis(str=''):
-    # Return platform-dependent emoji-safe version of string
-    return str.encode().decode('ascii', 'ignore') if platform.system() == 'Windows' else str
+    # Return emoji-safe string (Ubuntu 环境下直接返回原字符串)
+    return str
 
 
 def check_online():

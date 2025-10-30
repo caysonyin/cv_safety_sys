@@ -63,7 +63,7 @@ class RealtimePoseDetector:
             new_h = int(h * scale)
             frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
         
-        # 确保尺寸是16的倍数（优化GPU处理）
+        # 确保尺寸是16的倍数，便于统一推理流程
         h, w = frame.shape[:2]
         new_h = ((h + 15) // 16) * 16
         new_w = ((w + 15) // 16) * 16

@@ -101,8 +101,8 @@ def main():
     if python_ok and not missing and camera_ok:
         print("🎉 环境检查通过！可以运行姿态检测程序了")
         print("\n运行方式:")
-        print("1. 双击 run_webcam.bat")
-        print("2. 或运行: python webcam_pose_minimal.py")
+        print("1. 运行: python webcam_pose_minimal.py")
+        print("2. 或运行: python webcam_pose_simple.py")
         return True
     else:
         print("⚠️ 环境检查未完全通过，请解决上述问题")

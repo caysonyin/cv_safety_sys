@@ -38,6 +38,6 @@ WebcamPoseDetection/
 ## 与其他子系统的关系
 
 - `object_protection/integrated_safety_monitor.py` 通过导入 `download_model.py` 获取模型路径，并在安全联动场景中复用姿态检测能力。
-- 环境依赖与该模块共享 `envs/webcam_pose_detection_requirements.txt` 配置。
+- 环境依赖与其他子系统统一在仓库根目录的 `requirements.txt` 中维护。
 
 了解以上结构，有助于快速定位需要修改或复用的脚本位置。

@@ -30,7 +30,23 @@ python object_protection/video_relic_tracking.py --source 0
 python object_protection/integrated_safety_monitor.py --source 0
 ```
 
-Each script accepts `--source` to select a camera index or video file. The first YOLO-based run downloads `yolov7-tiny.pt` automatically unless the file is already present in `object_protection/`.
+Each script accepts `--source` to select a camera index or video file.  
+Clone the upstream YOLOv7 repo into `/yolov7` before running the detectors:
+
+```bash
+git clone --depth 1 https://github.com/WongKinYiu/yolov7.git yolov7
+```
+
+The first YOLO-based run downloads `yolov7-tiny.pt` automatically unless the weight file already exists. To fetch it manually:
+
+```bash
+curl -L -o yolov7-tiny.pt \
+  https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt
+```
+
+To use the weights fine-tuned on our museum dataset, download them from Google Drive and place the file alongside the default weights:
+
+- https://drive.google.com/drive/folders/1xjeqz_GMzl5gKie2LgOHv-iQns_v3mU4?usp=share_link
 
 ## Repository Layout
 

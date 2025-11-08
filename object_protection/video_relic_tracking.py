@@ -143,6 +143,8 @@ class VideoRelicTracker:
         device,
         confidence_threshold: float = 0.1,
         window_name: Optional[str] = None,
+        *,
+        display_window: bool = True,
     ):
         self.model = model
         self.device = device
@@ -156,10 +158,12 @@ class VideoRelicTracker:
             else "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
         )
         self.confidence_threshold = confidence_threshold
+        self.display_window = display_window
 
         # 创建窗口
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(self.window_name, self.mouse_callback)
+        if self.display_window:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
     def _prepare_image(self, frame: np.ndarray) -> torch.Tensor:
         """预处理输入图像以便进行模型推理"""
@@ -488,22 +492,26 @@ class VideoRelicTracker:
                 2
             )
             
-            # 显示图片
-            cv2.imshow(self.window_name, result_frame)
-            
-            # 处理按键
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC键
-                break
-            elif key == 13:  # Enter键
-                print(f"确认选择 {len(self.selected_relics)} 个文物")
-            elif key == ord('s') or key == ord('S'):  # S键保存
-                filename = f"tracking_frame_{frame_count}.jpg"
-                cv2.imwrite(filename, result_frame)
-                print(f"保存帧到: {filename}")
-        
+            if self.display_window:
+                # 显示图片
+                cv2.imshow(self.window_name, result_frame)
+
+                # 处理按键
+                key = cv2.waitKey(1) & 0xFF
+                if key == 27:  # ESC键
+                    break
+                elif key == 13:  # Enter键
+                    print(f"确认选择 {len(self.selected_relics)} 个文物")
+                elif key == ord('s') or key == ord('S'):  # S键保存
+                    filename = f"tracking_frame_{frame_count}.jpg"
+                    cv2.imwrite(filename, result_frame)
+                    print(f"保存帧到: {filename}")
+            else:
+                time.sleep(0.01)
+
         cap.release()
-        cv2.destroyAllWindows()
+        if self.display_window:
+            cv2.destroyAllWindows()
 
 def download_yolov7_tiny(destination: Path = Path("yolov7-tiny.pt")) -> Optional[Path]:
     """下载YOLOv7-tiny预训练模型"""

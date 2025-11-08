@@ -4,6 +4,7 @@ A consolidated computer vision toolkit for safeguarding exhibit areas. The repos
 
 - **WebcamPoseDetection** — MediaPipe-based, 33-keypoint human pose estimation with minimal, developer-friendly, and performance-optimized pipelines.
 - **object_protection** — YOLOv7-tiny powered detection, interactive object tracking, and an integrated safety monitor that cross-references pose landmarks with detected items.
+- **webapp** — A Flask-driven dashboard that streams the integrated monitor, surfaces analytics, and offers remote configuration controls.
 
 The current configuration treats **cups as the protected exhibit proxy** and flags a **tennis racket as the hazardous object**. All UI labels, filtering logic, and alerts align with this setup.
 
@@ -12,6 +13,7 @@ The current configuration treats **cups as the protected exhibit proxy** and fla
 - Real-time YOLOv7-tiny inference with centroid tracking and interactive selection of protected cups.
 - Automatic safety fence calculation around selected cups with intrusion detection based on MediaPipe pose landmarks.
 - Hazard detection workflow that highlights tennis rackets and binds them to the nearest tracked person for alerting.
+- Immersive, animation-rich web cockpit with live video, real-time alerts, and multi-day safety summaries.
 - Lightweight dependency footprint tested on Python 3.9 / Ubuntu 22.04 (CPU-only baseline).
 
 ## Quick Start
@@ -28,9 +30,20 @@ python object_protection/video_relic_tracking.py --source 0
 
 # Run the integrated safety monitor (cups + tennis rackets)
 python object_protection/integrated_safety_monitor.py --source 0
+
+# Launch the web dashboard (streams the integrated safety monitor)
+python -m webapp.app
 ```
 
-Each script accepts `--source` to select a camera index or video file.  
+Each script accepts `--source` to select a camera index or video file. The dashboard honours the same configuration through environment variables:
+
+```bash
+export VIDEO_SOURCE=0            # Camera index or video file path
+export CONFIDENCE_THRESHOLD=0.25 # Optional override for YOLO confidence
+python -m webapp.app
+```
+
+Navigate to `http://localhost:8000` to interact with the dashboard. Use the sidebar actions to enrol or clear protected relics remotely.
 Clone the upstream YOLOv7 repo into `/yolov7` before running the detectors:
 
 ```bash

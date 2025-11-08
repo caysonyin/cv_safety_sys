@@ -140,12 +140,14 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         *,
         pose_model_path: str,
         confidence_threshold: float = 0.1,
+        display_window: bool = True,
     ):
         super().__init__(
             model,
             device,
             confidence_threshold=confidence_threshold,
             window_name="文物安全协同防护系统",
+            display_window=display_window,
         )
 
         self.pose_helper = PoseLandmarkHelper(pose_model_path)
@@ -690,34 +692,38 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                     self._draw_monitoring_summary(canvas)
                 self._render_toast(canvas)
 
-                cv2.imshow(self.window_name, canvas)
+                if self.display_window:
+                    cv2.imshow(self.window_name, canvas)
 
-                key = cv2.waitKey(1) & 0xFF
-                if key == 27:
-                    break
-                if key == 13:
-                    if self.workflow_stage == "selection":
-                        if not self.selected_relics:
-                            self._show_toast("请先选择至少一个文物", (0, 0, 255))
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == 27:
+                        break
+                    if key == 13:
+                        if self.workflow_stage == "selection":
+                            if not self.selected_relics:
+                                self._show_toast("请先选择至少一个文物", (0, 0, 255))
+                            else:
+                                print(f"确认选择 {len(self.selected_relics)} 个文物")
+                                self._change_stage("monitoring")
                         else:
-                            print(f"确认选择 {len(self.selected_relics)} 个文物")
-                            self._change_stage("monitoring")
-                    else:
-                        self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
-                if key in (ord('s'), ord('S')):
-                    filename = f"integrated_frame_{frame_count}.jpg"
-                    cv2.imwrite(filename, canvas)
-                    print(f"保存帧到: {filename}")
-                    self._show_toast(f"已保存 {filename}", (0, 170, 255), 1.6)
-                if key in (ord('r'), ord('R')):
-                    if self.workflow_stage != "selection":
-                        self._change_stage("selection")
-                        print("返回文物选择阶段")
+                            self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
+                    if key in (ord('s'), ord('S')):
+                        filename = f"integrated_frame_{frame_count}.jpg"
+                        cv2.imwrite(filename, canvas)
+                        print(f"保存帧到: {filename}")
+                        self._show_toast(f"已保存 {filename}", (0, 170, 255), 1.6)
+                    if key in (ord('r'), ord('R')):
+                        if self.workflow_stage != "selection":
+                            self._change_stage("selection")
+                            print("返回文物选择阶段")
+                else:
+                    time.sleep(0.01)
 
         finally:
             cap.release()
             self.pose_helper.close()
-            cv2.destroyAllWindows()
+            if self.display_window:
+                cv2.destroyAllWindows()
 
 
 def parse_args() -> argparse.Namespace:

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文物安全协同防护 · 智能监控中枢</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" integrity="sha512-Vz08h9ZkM4w3kGumZ5qX6Ch12yvDqOiiMHDL/95B2S/bjdKCV2lE8p4nH3UX0eD+s/COM24kTx5c5Ny8x7Bq5w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+  </head>
+  <body class="dashboard-body">
+    <div class="dashboard-shell">
+      <aside class="dashboard-sidebar">
+        <div class="brand-block">
+          <div class="brand-logo">CV</div>
+          <div class="brand-name">文物安全协同防护</div>
+        </div>
+        <p class="sidebar-tip">实时监控 · 智慧预警 · 多维洞察</p>
+        <div class="sidebar-stats">
+          <div class="sidebar-stat">
+            <span class="label">监控状态</span>
+            <span class="value" id="sidebar-monitor-state">初始化</span>
+          </div>
+          <div class="sidebar-stat">
+            <span class="label">监控时长</span>
+            <span class="value" id="sidebar-session-duration">00:00</span>
+          </div>
+          <div class="sidebar-stat">
+            <span class="label">当前帧率</span>
+            <span class="value" id="sidebar-fps">0 fps</span>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <button class="action-button" id="protect-all">一键保护全部</button>
+          <button class="action-button ghost" id="clear-selection">清空选择</button>
+        </div>
+        <div class="sidebar-footer">安全守护 · 由内而外</div>
+      </aside>
+
+      <main class="dashboard-main">
+        <header class="dashboard-header">
+          <div>
+            <h1>智能安防驾驶舱</h1>
+            <p>融合文物保护、人员行为与危险物品检测的全景化可视化中心</p>
+          </div>
+          <div class="header-badges">
+            <span class="badge" id="badge-stage">阶段：初始化</span>
+            <span class="badge soft" id="badge-alert-count">累计报警 0</span>
+          </div>
+        </header>
+
+        <section class="video-section">
+          <div class="video-card">
+            <img id="video-stream" src="{{ url_for('stream') }}" alt="实时监控画面" />
+            <div class="video-overlay">
+              <div class="overlay-status" id="overlay-monitor-state">准备中</div>
+              <div class="overlay-meta">
+                <div class="overlay-chip">
+                  <span>危险物品</span>
+                  <strong id="overlay-danger-count">0</strong>
+                </div>
+                <div class="overlay-chip">
+                  <span>重点人员</span>
+                  <strong><span id="overlay-person-risk">0</span>/<span id="overlay-person-total">0</span></strong>
+                </div>
+                <div class="overlay-chip">
+                  <span>保护文物</span>
+                  <strong id="overlay-relic-selected">0</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="stats-section">
+          <div class="stat-card" id="stat-total-alerts">
+            <p class="stat-title">累计报警</p>
+            <p class="stat-value" id="total-alerts">0</p>
+            <p class="stat-sub">包含入侵与危险携带</p>
+          </div>
+          <div class="stat-card" id="stat-daily">
+            <p class="stat-title">今日安防概览</p>
+            <p class="stat-value" id="daily-total">0</p>
+            <div class="stat-sub-detail">
+              <span>入侵 <strong id="daily-intrusions">0</strong></span>
+              <span>危险 <strong id="daily-dangerous">0</strong></span>
+            </div>
+          </div>
+          <div class="stat-card" id="stat-weekly">
+            <p class="stat-title">七日趋势</p>
+            <p class="stat-value" id="weekly-total">0</p>
+            <div class="stat-sub-detail">
+              <span>入侵 <strong id="weekly-intrusions">0</strong></span>
+              <span>危险 <strong id="weekly-dangerous">0</strong></span>
+            </div>
+          </div>
+          <div class="stat-card" id="stat-fps">
+            <p class="stat-title">实时性能</p>
+            <p class="stat-value" id="stat-fps-value">0 fps</p>
+            <p class="stat-sub" id="stat-status-message">系统稳定运行中</p>
+          </div>
+        </section>
+
+        <section class="lower-grid">
+          <div class="panel alerts-panel">
+            <div class="panel-header">
+              <h2>实时报警流</h2>
+              <span class="panel-tag" id="live-alert-count">0 条</span>
+            </div>
+            <ul class="alert-list" id="live-alerts"></ul>
+          </div>
+
+          <div class="panel history-panel">
+            <div class="panel-header">
+              <h2>历史事件</h2>
+              <span class="panel-tag">最近记录</span>
+            </div>
+            <ul class="history-timeline" id="history-list"></ul>
+          </div>
+        </section>
+
+        <section class="relic-section panel">
+          <div class="panel-header">
+            <h2>文物防护配置</h2>
+            <span class="panel-tag" id="relic-count">0 项</span>
+          </div>
+          <div class="relic-grid" id="relic-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+  </body>
+</html>

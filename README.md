@@ -28,6 +28,9 @@ python object_protection/video_relic_tracking.py --source 0
 
 # Run the integrated safety monitor (cups + tennis rackets)
 python object_protection/integrated_safety_monitor.py --source 0
+
+# Launch the PyQt desktop client with visual alerts & optional custom sound
+python object_protection/qt_monitor_app.py --source 0 [--alert-sound path/to/sound.wav]
 ```
 
 Each script accepts `--source` to select a camera index or video file.  

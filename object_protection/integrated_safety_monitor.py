@@ -140,12 +140,14 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         *,
         pose_model_path: str,
         confidence_threshold: float = 0.1,
+        create_window: bool = True,
     ):
         super().__init__(
             model,
             device,
             confidence_threshold=confidence_threshold,
             window_name="文物安全协同防护系统",
+            create_window=create_window,
         )
 
         self.pose_helper = PoseLandmarkHelper(pose_model_path)
@@ -165,6 +167,8 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.toast_message: str | None = None
         self.toast_color: Tuple[int, int, int] = (0, 170, 255)
         self.toast_expire: float = 0.0
+        self.frame_count = 0
+        self.last_frame_shape: Tuple[int, int, int] | None = None
 
     # ------------------------------------------------------------------
     # 数据准备
@@ -619,6 +623,119 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
     # ------------------------------------------------------------------
     # 主流程
     # ------------------------------------------------------------------
+    def enter_selection_mode(self) -> None:
+        """切换到文物选择阶段。"""
+        self._change_stage("selection")
+
+    def start_monitoring(self) -> bool:
+        """尝试进入实时监控阶段。"""
+        if not self.selected_relics:
+            self._show_toast("请先选择至少一个文物", (0, 0, 255))
+            return False
+        if self.workflow_stage != "monitoring":
+            self._change_stage("monitoring")
+        else:
+            self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
+        return True
+
+    def get_recent_alerts(self, limit: int = 4) -> List[str]:
+        """返回近期报警信息。"""
+        return [msg for _, msg in list(reversed(self.alert_history))[:limit]]
+
+    def process_frame(self, frame: np.ndarray) -> Dict[str, object]:
+        """处理单帧图像并返回渲染结果与状态信息。"""
+
+        if frame is None:
+            raise ValueError("输入帧不能为空")
+
+        self.frame_count += 1
+        self.last_frame_shape = frame.shape
+
+        all_detections = self._detect_all_objects(frame)
+        self.relic_detections = self.detect_relics(frame, all_detections)
+        self.update_tracking(self.relic_detections)
+        self._update_person_detections(all_detections)
+
+        pose_entries = self.pose_helper.detect(frame)
+        self._match_pose_to_persons(pose_entries)
+        self._build_active_fences(frame.shape)
+
+        if self.workflow_stage == "selection":
+            alerts: List[str] = []
+        else:
+            alerts = self._analyse_risks()
+
+        canvas = self.draw_detections(frame)
+        self._draw_active_fence_overlay(canvas)
+        self._draw_pose(canvas, pose_entries)
+        self._draw_persons(canvas)
+        self._draw_dangerous_items(canvas)
+        self._draw_alert_panel(canvas, alerts)
+
+        if alerts:
+            self.total_alerts += len(alerts)
+            for alert in alerts:
+                if "侵入" in alert:
+                    self.total_intrusions += 1
+                if "携带" in alert:
+                    self.total_dangerous_flags += 1
+
+        cv2.putText(
+            canvas,
+            f"Frame: {self.frame_count}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 255, 255),
+            2,
+        )
+
+        self._draw_header(canvas, self.workflow_stage)
+        self._draw_footer(canvas)
+        if self.workflow_stage == "selection":
+            self._draw_selection_overlay(canvas)
+        else:
+            self._draw_monitoring_summary(canvas)
+        self._render_toast(canvas)
+
+        status = {
+            'stage': self.workflow_stage,
+            'monitoring_active': self.monitoring_active,
+            'frame_count': self.frame_count,
+            'selected_relics': sorted(self.selected_relics),
+            'person_count': len(self.person_detections),
+            'dangerous_items': [
+                {
+                    'label': det.get('class_name', ''),
+                    'confidence': float(det.get('confidence', 0.0)),
+                }
+                for det in self.dangerous_detections
+            ],
+            'alerts': list(alerts),
+            'recent_alerts': self.get_recent_alerts(),
+            'total_alerts': self.total_alerts,
+            'total_intrusions': self.total_intrusions,
+            'total_dangerous_flags': self.total_dangerous_flags,
+            'fence_count': len(self.active_fences),
+            'session_duration': time.time() - self.session_start_time
+            if self.monitoring_active
+            else 0.0,
+            'toast': {
+                'message': self.toast_message,
+                'color': self.toast_color,
+                'expire': self.toast_expire,
+            }
+            if self.toast_message
+            else None,
+        }
+
+        return {
+            'frame': canvas,
+            'pose_entries': pose_entries,
+            'alerts': alerts,
+            'status': status,
+        }
+
     def run(self, video_source: int | str = 0) -> None:
         cap = cv2.VideoCapture(video_source)
 

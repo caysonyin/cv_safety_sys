@@ -143,6 +143,8 @@ class VideoRelicTracker:
         device,
         confidence_threshold: float = 0.1,
         window_name: Optional[str] = None,
+        *,
+        create_window: bool = True,
     ):
         self.model = model
         self.device = device
@@ -156,10 +158,12 @@ class VideoRelicTracker:
             else "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
         )
         self.confidence_threshold = confidence_threshold
+        self._create_window = create_window
 
         # 创建窗口
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(self.window_name, self.mouse_callback)
+        if self._create_window:
+            cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+            cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
     def _prepare_image(self, frame: np.ndarray) -> torch.Tensor:
         """预处理输入图像以便进行模型推理"""
@@ -211,18 +215,8 @@ class VideoRelicTracker:
     def mouse_callback(self, event, x, y, flags, param):
         """鼠标回调函数"""
         if event == cv2.EVENT_LBUTTONDOWN:
-            # 检查点击是否在某个检测框内
-            clicked_relic = self.get_clicked_relic(x, y)
-            if clicked_relic is not None:
-                if clicked_relic in self.selected_relics:
-                    # 如果已选中，则取消选择
-                    self.selected_relics.remove(clicked_relic)
-                    print(f"取消选择文物 {clicked_relic}")
-                else:
-                    # 如果未选中，则选择
-                    self.selected_relics.add(clicked_relic)
-                    print(f"选择文物 {clicked_relic}")
-    
+            self.handle_click(x, y)
+
     def get_clicked_relic(self, x, y):
         """获取点击的文物ID"""
         for detection in self.relic_detections:
@@ -230,6 +224,29 @@ class VideoRelicTracker:
             if x1 <= x <= x2 and y1 <= y <= y2:
                 return detection.get('track_id', None)
         return None
+
+    def toggle_relic_selection(self, relic_id: Optional[int]) -> None:
+        """根据给定的ID切换文物选中状态。"""
+        if relic_id is None:
+            return
+        if relic_id in self.selected_relics:
+            self.selected_relics.remove(relic_id)
+            print(f"取消选择文物 {relic_id}")
+        else:
+            self.selected_relics.add(relic_id)
+            print(f"选择文物 {relic_id}")
+
+    def clear_selection(self) -> None:
+        """取消所有选中的文物。"""
+        if self.selected_relics:
+            self.selected_relics.clear()
+            print("已清空所有选中文物")
+
+    def handle_click(self, x: int, y: int) -> None:
+        """用于交互界面处理点击事件。"""
+        clicked_relic = self.get_clicked_relic(x, y)
+        if clicked_relic is not None:
+            self.toggle_relic_selection(clicked_relic)
     
     def _detect_all_objects(self, frame: np.ndarray) -> List[Dict[str, object]]:
         """运行一次YOLO检测并返回所有检测结果。"""

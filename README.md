@@ -1,60 +1,38 @@
 # CV Safety System
 
-A consolidated computer vision toolkit for safeguarding exhibit areas. The repository provides two runtime-ready subsystems that can operate independently or in tandem:
+一个面向展陈安全场景的计算机视觉平台，现已集成统一的 Web 控制台，可在浏览器中查看视频流、实时统计信息与告警提示。本仓库仍保留原有的独立子模块以便研究，但日常部署推荐使用新的 Web 方案。
 
-- **WebcamPoseDetection** — MediaPipe-based, 33-keypoint human pose estimation with minimal, developer-friendly, and performance-optimized pipelines.
-- **object_protection** — YOLOv7-tiny powered detection, interactive object tracking, and an integrated safety monitor that cross-references pose landmarks with detected items.
+## 新增特性概览
 
-The current configuration treats **cups as the protected exhibit proxy** and flags a **tennis racket as the hazardous object**. All UI labels, filtering logic, and alerts align with this setup.
+- **一键启动**：执行根目录下的 `run_system.py` 即可启动服务，自动检查并下载所需的 MediaPipe 姿态模型与 Faster R-CNN 检测权重。
+- **Web 实时监控台**：在浏览器中同时查看视频流、统计面板、实时告警与历史记录，支持声音及可视化双重告警。
+- **融合分析**：结合人体姿态、重点文物与危险物检测结果，自动识别靠近文物或携带危险物的人员行为。
+- **模块化结构**：`safety_monitor` 目录提供清晰的模型管理、分析管线与 Web 服务划分，方便二次开发或替换模型。
 
-## Key Capabilities
-
-- Real-time YOLOv7-tiny inference with centroid tracking and interactive selection of protected cups.
-- Automatic safety fence calculation around selected cups with intrusion detection based on MediaPipe pose landmarks.
-- Hazard detection workflow that highlights tennis rackets and binds them to the nearest tracked person for alerting.
-- Lightweight dependency footprint tested on Python 3.9 / Ubuntu 22.04 (CPU-only baseline).
-
-## Quick Start
+## 快速上手
 
 ```bash
-# Install shared dependencies
+# 安装依赖
 pip install -r requirements.txt
 
-# Download MediaPipe pose model
-python WebcamPoseDetection/download_model.py
+# 启动融合安放系统（默认调用本地摄像头）
+python run_system.py --source 0
 
-# Run the cup tracker (default webcam)
-python object_protection/video_relic_tracking.py --source 0
-
-# Run the integrated safety monitor (cups + tennis rackets)
-python object_protection/integrated_safety_monitor.py --source 0
+# 如需改用视频文件
+python run_system.py --source path/to/video.mp4
 ```
 
-Each script accepts `--source` to select a camera index or video file.  
-Clone the upstream YOLOv7 repo into `/yolov7` before running the detectors:
+运行后访问 `http://127.0.0.1:8000/`（或根据 `--host/--port` 参数自定义地址）即可使用 Web 控制台。系统首次启动会在 `models/` 目录下载并缓存权重文件。
 
-```bash
-git clone --depth 1 https://github.com/WongKinYiu/yolov7.git yolov7
-```
-
-The first YOLO-based run downloads `yolov7-tiny.pt` automatically unless the weight file already exists. To fetch it manually:
-
-```bash
-curl -L -o yolov7-tiny.pt \
-  https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt
-```
-
-To use the weights fine-tuned on our museum dataset, download them from Google Drive and place the file alongside the default weights:
-
-- https://drive.google.com/drive/folders/1xjeqz_GMzl5gKie2LgOHv-iQns_v3mU4?usp=share_link
-
-## Repository Layout
+## 目录结构
 
 ```
 cv_safety_sys/
-├── WebcamPoseDetection/       # Pose estimation subsystem
-├── object_protection/         # Cup tracking and safety monitor
-└── docs/                      # Detailed subsystem documentation
+├── safety_monitor/            # 新的融合安放系统实现（模型管理、管线、Web UI）
+├── WebcamPoseDetection/       # 原始的 MediaPipe 姿态检测脚本
+├── object_protection/         # 历史 YOLOv7 方案（仍可参考）
+├── docs/                      # 现有功能的说明文档
+└── run_system.py              # 一键启动入口
 ```
 
-See the `docs/` directory for subsystem deep dives and implementation notes that correspond to the final configuration described above.
+更多实现细节可参考 `safety_monitor/` 目录下的源码与注释。旧版脚本仍然可运行，用于对比或迁移历史流程。

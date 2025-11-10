@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>文物安全融合监控系统</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>文物安全融合监控系统</h1>
+      <p>实时监控视频流，自动检测人员、文物与危险行为</p>
+    </header>
+    <main class="dashboard">
+      <section class="video-panel">
+        <img id="video-stream" src="/video_feed" alt="监控视频流" />
+        <div id="video-alert" class="alert-banner hidden">⚠️ 安全告警触发</div>
+      </section>
+      <section class="info-panel">
+        <div class="stats">
+          <div class="stat">
+            <span class="label">人员</span>
+            <span class="value" id="stat-persons">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">重点文物</span>
+            <span class="value" id="stat-relics">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">危险物</span>
+            <span class="value" id="stat-dangerous">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">FPS</span>
+            <span class="value" id="stat-fps">0</span>
+          </div>
+        </div>
+        <div class="session panel">
+          <h2>会话统计</h2>
+          <ul>
+            <li>累计告警：<span id="session-alerts">0</span></li>
+            <li>累计侵入：<span id="session-intrusions">0</span></li>
+            <li>危险标记：<span id="session-dangerous">0</span></li>
+            <li>运行时间：<span id="session-uptime">0s</span></li>
+          </ul>
+        </div>
+        <div class="alerts panel">
+          <h2>实时告警</h2>
+          <ul id="alerts-list"></ul>
+        </div>
+        <div class="history panel">
+          <h2>历史告警</h2>
+          <ul id="history-list"></ul>
+        </div>
+      </section>
+    </main>
+    <audio id="alert-sound">
+      <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=" type="audio/wav" />
+    </audio>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

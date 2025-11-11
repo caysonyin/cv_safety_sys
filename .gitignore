@@ -1,0 +1,32 @@
+# Python 缓存与编译文件
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.log
+
+# 临时文件与快照
+snapshots/
+*.jpg
+*.jpeg
+*.png
+*.DS_Store
+
+# 虚拟环境
+venv/
+.env/
+.envrc
+
+# IDE 文件
+.vscode/
+.idea/
+
+# 模型文件（如可选）
+*.ckpt
+*.pt
+*.onnx
+*.task
+
+# 临时测试脚本
+test_*.py

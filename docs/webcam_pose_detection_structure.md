@@ -1,13 +1,11 @@
-# WebcamPoseDetection 目录结构
+# Pose 示例目录结构
 
 ```
-WebcamPoseDetection/
-├── download_model.py             # 下载 MediaPipe 姿态模型
+examples/pose/
 ├── pose33_realtime_optimized.py  # 多线程 + 队列优化的实时检测器
 ├── webcam_pose_minimal.py        # 极简示例脚本
 ├── webcam_pose_simple.py         # 面向扩展的类封装版本
-├── test_setup.py                 # 运行环境自检脚本
-└── __init__.py (若存在则用于包化)
+└── test_setup.py                 # 运行环境自检脚本
 ```
 
 ## 代码导读
@@ -26,9 +24,9 @@ WebcamPoseDetection/
 - 内置帧尺寸自适应、性能统计与丢帧策略，适用于延迟敏感的场景。
 - 通过命令行参数选择输入源和运行模式，便于部署。
 
-### `download_model.py`
-- 下载官方 MediaPipe `pose_landmarker_full` 模型至仓库根目录的 `models/` 目录。
-- 在其他脚本调用前执行一次即可。
+### 模型下载
+- 通过 `cv_safety_sys.pose.download_model()` 下载官方 MediaPipe `pose_landmarker_full` 模型至仓库根目录的 `models/` 目录。
+- 在其他脚本调用前执行一次即可，可由 `run.py` 或任意脚本自动触发。
 
 ### `test_setup.py`
 - 检查必要依赖是否可用并测试摄像头打开情况。
@@ -36,7 +34,7 @@ WebcamPoseDetection/
 
 ## 与其他子系统的关系
 
-- `object_protection/integrated_safety_monitor.py` 通过导入 `download_model.py` 获取模型路径，并在安全联动场景中复用姿态检测能力。
+- `src/cv_safety_sys/monitoring/integrated_monitor.py` 通过 `cv_safety_sys.pose` 模块获取模型路径，并在安全联动场景中复用姿态检测能力。
 - 环境依赖与其他子系统统一在仓库根目录的 `requirements.txt` 中维护。
 
 了解以上结构，有助于快速定位需要修改或复用的脚本位置。

@@ -2,8 +2,8 @@
 
 A consolidated computer vision toolkit for safeguarding exhibit areas. The repository provides two runtime-ready subsystems that can operate independently or in tandem:
 
-- **WebcamPoseDetection** — MediaPipe-based, 33-keypoint human pose estimation with minimal, developer-friendly, and performance-optimized pipelines.
-- **object_protection** — YOLOv7-tiny powered detection, interactive object tracking, and an integrated safety monitor that cross-references pose landmarks with detected items.
+- **Pose demos (`examples/pose/`)** — MediaPipe-based, 33-keypoint human pose estimation with minimal, developer-friendly, and performance-optimized pipelines.
+- **Safety monitor core (`src/cv_safety_sys/`)** — YOLOv7-tiny powered detection, interactive object tracking, and an integrated safety monitor that cross-references pose landmarks with detected items.
 
 The current configuration treats **cups as the protected exhibit proxy** and flags a **tennis racket as the hazardous object**. All UI labels, filtering logic, and alerts align with this setup.
 
@@ -17,43 +17,35 @@ The current configuration treats **cups as the protected exhibit proxy** and fla
 ## Quick Start
 
 ```bash
-# Install shared dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# Download MediaPipe pose model
-python WebcamPoseDetection/download_model.py
+# Clone the YOLOv7 operator code used by the detector (only required once)
+git clone --depth 1 https://github.com/WongKinYiu/yolov7.git
 
-# Run the cup tracker (default webcam)
-python object_protection/video_relic_tracking.py --source 0
+# Launch the full desktop client (auto-downloads required models to ./models)
+python run.py --source 0
 
-# Run the integrated safety monitor (cups + tennis rackets)
-python object_protection/integrated_safety_monitor.py --source 0
+# Optional: provide a custom alert sound and alternate video source
+python run.py --source path/to/video.mp4 --alert-sound ./sounds/alarm.wav
 ```
 
-Each script accepts `--source` to select a camera index or video file.  
-Clone the upstream YOLOv7 repo into `/yolov7` before running the detectors:
-
-```bash
-git clone --depth 1 https://github.com/WongKinYiu/yolov7.git yolov7
-```
-
-The first YOLO-based run downloads `yolov7-tiny.pt` automatically unless the weight file already exists. To fetch it manually:
-
-```bash
-curl -L -o yolov7-tiny.pt \
-  https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt
-```
-
-To use the weights fine-tuned on our museum dataset, download them from Google Drive and place the file alongside the default weights:
-
-- https://drive.google.com/drive/folders/1xjeqz_GMzl5gKie2LgOHv-iQns_v3mU4?usp=share_link
+`run.py` automatically downloads the MediaPipe pose model and the YOLOv7-tiny
+weights into the shared `models/` directory if they are missing. To reuse
+custom weights, place them under `models/` and pass `--yolo-model`.
 
 ## Repository Layout
 
 ```
 cv_safety_sys/
-├── WebcamPoseDetection/       # Pose estimation subsystem
-├── object_protection/         # Cup tracking and safety monitor
+├── models/                    # Cached pose & detector weights (auto-created)
+├── run.py                     # One-click launcher for the PyQt desktop client
+├── src/cv_safety_sys/         # Python package with reusable modules
+│   ├── detection/             # YOLOv7 tracking utilities
+│   ├── monitoring/            # Integrated safety monitor core
+│   ├── pose/                  # MediaPipe pose helpers & downloader
+│   └── ui/                    # PyQt5 desktop application
+├── examples/pose/             # Stand-alone pose estimation demos
 └── docs/                      # Detailed subsystem documentation
 ```
 

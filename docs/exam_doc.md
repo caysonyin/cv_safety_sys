@@ -10,23 +10,23 @@
    - 文物安全联动：额外确认 `torch`、`torchvision` 与 `mediapipe` 版本匹配。
 3. **模型文件**：
    - `models/pose_landmarker_full.task` 存在。
-   - `object_protection/yolov7-tiny.pt` 已下载或可联网获取。
+   - `models/yolov7-tiny.pt` 已下载或可联网获取。
 
 ## 功能验证
 
 ### 1. 姿态识别
-- 运行 `python WebcamPoseDetection/webcam_pose_simple.py`。
+- 运行 `python examples/pose/webcam_pose_simple.py`。
 - 确认窗口中显示人体骨架，并且左上角 FPS 正常更新。
 
 ### 2. 文物检测与跟踪
-- 运行 `python object_protection/video_relic_tracking.py --source 0`。
+- 运行 `python -m cv_safety_sys.detection.yolov7_tracker --source 0`。
 - 鼠标点击某个检测框将其标记为受保护文物；按 `Enter` 固定选择。
 - 拖动物体穿过电子围栏，观察告警提示是否触发。
 
 ### 3. 安全联动监控
 - 确认姿态模型已下载后，运行：
   ```bash
-  python object_protection/integrated_safety_monitor.py --source 0
+  python run.py --source 0
   ```
 - 验证以下交互：
   - 人员靠近文物时的距离提示；

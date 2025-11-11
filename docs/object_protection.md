@@ -5,12 +5,10 @@ This module combines YOLOv7-tiny detection, centroid-based tracking, and MediaPi
 ## Folder Overview
 
 ```
-object_protection/
-├── video_relic_tracking.py       # YOLOv7-tiny cup detector with interactive tracking
-├── integrated_safety_monitor.py  # Cup fence monitoring + pose + tennis racket alerts
-├── general.py                    # Trimmed utility helpers imported from YOLOv7
-├── yolov7-tiny.pt                # Inference weights (downloaded on first run)
-└── yolov7/                       # Vendor directory required by the detector
+src/cv_safety_sys/
+├── detection/yolov7_tracker.py      # YOLOv7-tiny cup detector with interactive tracking
+├── monitoring/integrated_monitor.py # Cup fence monitoring + pose + tennis racket alerts
+└── ui/qt_monitor.py                 # PyQt5 desktop client and monitor bootstrap helpers
 ```
 
 ## Final Feature Set
@@ -23,18 +21,20 @@ object_protection/
 ## Operating the Scripts
 
 ```bash
-# Interactive cup tracking (default webcam)
-python object_protection/video_relic_tracking.py --source 0
+# Launch the full desktop client (defaults to the first webcam)
+python run.py --source 0
 
-# Integrated monitor combining cups, people, and tennis rackets
-python object_protection/integrated_safety_monitor.py --source 0
+# Optional: run the detector headlessly for testing
+python -m cv_safety_sys.detection.yolov7_tracker --source 0
 ```
 
-Optional flags:
+Key flags (applies to both entry points):
 - `--source`: camera index or path to a video file.
-- `--conf`: confidence threshold override (default `0.1`).
+- `--conf`: confidence threshold override (default `0.25` in the GUI, `0.1` for the CLI tracker).
+- `--pose-model`: override the cached MediaPipe pose model path (defaults to `models/pose_landmarker_full.task`).
+- `--yolo-model`: override the cached YOLOv7-tiny weights (defaults to `models/yolov7-tiny.pt`).
 
-The integrated monitor automatically loads the MediaPipe pose model downloaded via `WebcamPoseDetection/download_model.py` and reuses the shared `SimpleTracker`.
+The monitor bootstrap automatically downloads missing assets and reuses the shared `SimpleTracker` implementation.
 
 ## Implementation Notes
 

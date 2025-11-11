@@ -1,5 +1,5 @@
 # Python 缓存与编译文件
-src/__pycache__/
+src/cv_safety_sys/__pycache__/
 __pycache__/
 *.py[cod]
 *.pyo

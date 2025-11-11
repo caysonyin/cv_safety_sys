@@ -26,8 +26,11 @@ git clone --depth 1 https://github.com/WongKinYiu/yolov7.git
 # Launch the full desktop client (auto-downloads required models to ./models)
 python run.py --source 0
 
-# Optional: provide a custom alert sound and alternate video source
-python run.py --source path/to/video.mp4 --alert-sound ./sounds/alarm.wav
+# Run the integrated safety monitor (cups + tennis rackets)
+python object_protection/integrated_safety_monitor.py --source 0
+
+# Launch the PyQt desktop client with visual alerts & optional custom sound
+python object_protection/qt_monitor_app.py --source 0 [--alert-sound path/to/sound.wav]
 ```
 
 `run.py` automatically downloads the MediaPipe pose model and the YOLOv7-tiny

@@ -34,6 +34,7 @@ from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
 )
+from cv_safety_sys.utils import put_text
 
 
 POSE_CONNECTIONS = tuple(mp.solutions.pose.POSE_CONNECTIONS)
@@ -332,7 +333,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         cv2.rectangle(overlay, (x1, y1), (x1 + box_width, y1 + box_height), (20, 24, 35), -1)
         cv2.rectangle(overlay, (x1, y1), (x1 + box_width, y1 + box_height), self.toast_color, 2)
         cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-        cv2.putText(
+        put_text(
             frame,
             self.toast_message,
             (x1 + 16, y1 + 28),
@@ -348,7 +349,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         overlay = frame.copy()
         cv2.rectangle(overlay, (0, 0), (w, 68), (24, 28, 40), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-        cv2.putText(
+        put_text(
             frame,
             "文物安全协同防护系统",
             (22, 42),
@@ -362,7 +363,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             "monitoring": "工作流阶段：实时监控",
         }
         stage_text = stage_map.get(stage, stage)
-        cv2.putText(
+        put_text(
             frame,
             stage_text,
             (w - 320, 42),
@@ -382,7 +383,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         instructions = (
             "鼠标左键选中/取消 · Enter 开始监控 · R 重新选择 · S 保存画面 · ESC 退出"
         )
-        cv2.putText(
+        put_text(
             frame,
             instructions,
             (20, h - 12),
@@ -409,7 +410,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         cv2.rectangle(overlay, (x, y), (x + width, y + 4), accent_color, -1)
         cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
 
-        cv2.putText(
+        put_text(
             frame,
             title,
             (x + 16, y + 30),
@@ -420,7 +421,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         )
 
         for idx, line in enumerate(lines):
-            cv2.putText(
+            put_text(
                 frame,
                 line,
                 (x + 16, y + 30 + (idx + 1) * line_height),
@@ -466,7 +467,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         for fence in self.active_fences:
             x1, y1, x2, y2 = map(int, fence['bbox'])
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 120, 255), 2)
-            cv2.putText(
+            put_text(
                 frame,
                 f"{fence['label']} 安全区",
                 (x1 + 6, y1 + 24),
@@ -506,7 +507,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             else:
                 text = "Person"
 
-            cv2.putText(
+            put_text(
                 frame,
                 text,
                 (x1, y1 - 8),
@@ -517,7 +518,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             )
 
             for idx, message in enumerate(person.get('risk_messages', [])):
-                cv2.putText(
+                put_text(
                     frame,
                     message,
                     (x1, y2 + 20 + idx * 18),
@@ -532,7 +533,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             x1, y1, x2, y2 = map(int, danger['bbox'])
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2)
             label = f"{danger['class_name']} {danger['confidence']:.2f}"
-            cv2.putText(
+            put_text(
                 frame,
                 label,
                 (x1, max(0, y1 - 8)),
@@ -560,7 +561,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         cv2.rectangle(overlay, (panel_x1, panel_y1), (panel_x2, panel_y1 + 4), (0, 120, 255), -1)
         cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
 
-        cv2.putText(
+        put_text(
             frame,
             "安全事件监控",
             (panel_x1 + 16, panel_y1 + 32),
@@ -570,7 +571,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             2,
         )
 
-        cv2.putText(
+        put_text(
             frame,
             f"危险物品：{len(self.dangerous_detections)}",
             (panel_x1 + 16, panel_y1 + 64),
@@ -579,7 +580,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             (210, 210, 210),
             1,
         )
-        cv2.putText(
+        put_text(
             frame,
             f"入侵栅栏：{self.total_intrusions}",
             (panel_x1 + 16, panel_y1 + 88),
@@ -588,7 +589,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             (210, 210, 210),
             1,
         )
-        cv2.putText(
+        put_text(
             frame,
             f"危险携带：{self.total_dangerous_flags}",
             (panel_x1 + 16, panel_y1 + 112),
@@ -603,7 +604,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
 
         base_y = panel_y1 + 140
         if recent_alerts:
-            cv2.putText(
+            put_text(
                 frame,
                 "实时报警:",
                 (panel_x1 + 16, base_y - 10),
@@ -614,7 +615,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             )
 
         for idx, msg in enumerate(recent_alerts):
-            cv2.putText(
+            put_text(
                 frame,
                 msg,
                 (panel_x1 + 16, base_y + idx * 22),
@@ -684,7 +685,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                 if "携带" in alert:
                     self.total_dangerous_flags += 1
 
-        cv2.putText(
+        put_text(
             canvas,
             f"Frame: {self.frame_count}",
             (10, 30),
@@ -793,7 +794,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                         if "携带" in alert:
                             self.total_dangerous_flags += 1
 
-                cv2.putText(
+                put_text(
                     canvas,
                     f"Frame: {frame_count}",
                     (10, 30),
@@ -888,4 +889,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-

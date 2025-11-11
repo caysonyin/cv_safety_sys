@@ -12,7 +12,7 @@ The current configuration treats **cups as the protected exhibit proxy** and fla
 - Real-time YOLOv7-tiny inference with centroid tracking and interactive selection of protected cups.
 - Automatic safety fence calculation around selected cups with intrusion detection based on MediaPipe pose landmarks.
 - Hazard detection workflow that highlights tennis rackets and binds them to the nearest tracked person for alerting.
-- Lightweight dependency footprint tested on Python 3.9 / Ubuntu 22.04 (CPU-only baseline).
+- Lightweight dependency footprint tested on Python 3.10 / Ubuntu 22.04 (CPU-only baseline).
 
 ## Quick Start
 
@@ -36,6 +36,14 @@ python object_protection/qt_monitor_app.py --source 0 [--alert-sound path/to/sou
 `run.py` automatically downloads the MediaPipe pose model and the YOLOv7-tiny
 weights into the shared `models/` directory if they are missing. To reuse
 custom weights, place them under `models/` and pass `--yolo-model`.
+
+## Chinese Text Rendering
+
+The monitoring overlays inside the video feed now use a Unicode-capable text renderer.
+The helper automatically looks for common Chinese fonts (STHeiti, Microsoft YaHei,
+WenQuanYi, Noto Sans CJK, etc.). If your system stores fonts elsewhere, point the
+renderer to a specific file by exporting `CV_SAFETY_FONT=/absolute/path/to/font.ttf`
+before launching `run.py` or `object_protection/qt_monitor_app.py`.
 
 ## Repository Layout
 

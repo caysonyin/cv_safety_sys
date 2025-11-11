@@ -50,7 +50,7 @@ class VideoLabel(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(640, 480)
         self.setStyleSheet(
-            "background-color: #141821; border: 1px solid #222836; border-radius: 6px;"
+            "background-color: #f4f6fb; border: 1px solid #d9deea; border-radius: 8px;"
         )
 
     def setImage(self, image: QImage) -> None:
@@ -184,9 +184,13 @@ class SafetyMonitorWindow(QMainWindow):
         self.toast_label.hide()
 
         self.alerts_list = QListWidget()
-        self.alerts_list.setStyleSheet("background-color: #1e2431; border: none; color: #ff9c9c;")
+        self.alerts_list.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid #d9deea; border-radius: 6px; color: #c62828; padding: 6px;"
+        )
         self.danger_list = QListWidget()
-        self.danger_list.setStyleSheet("background-color: #1e2431; border: none; color: #f7d27b;")
+        self.danger_list.setStyleSheet(
+            "background-color: #ffffff; border: 1px solid #d9deea; border-radius: 6px; color: #8a5800; padding: 6px;"
+        )
 
         self.latest_status: Dict[str, object] = {}
         self.current_frame: np.ndarray | None = None
@@ -205,10 +209,10 @@ class SafetyMonitorWindow(QMainWindow):
 
     def _setup_palette(self) -> None:
         palette = QPalette()
-        palette.setColor(QPalette.Window, QColor(18, 22, 30))
-        palette.setColor(QPalette.Base, QColor(25, 31, 43))
-        palette.setColor(QPalette.AlternateBase, QColor(28, 34, 45))
-        palette.setColor(QPalette.WindowText, QColor(230, 233, 240))
+        palette.setColor(QPalette.Window, QColor(244, 246, 251))
+        palette.setColor(QPalette.Base, QColor(255, 255, 255))
+        palette.setColor(QPalette.AlternateBase, QColor(238, 242, 255))
+        palette.setColor(QPalette.WindowText, QColor(34, 40, 62))
         self.setPalette(palette)
 
     def _build_layout(self) -> QHBoxLayout:
@@ -222,7 +226,9 @@ class SafetyMonitorWindow(QMainWindow):
         sidebar.setSpacing(16)
 
         status_group = QGroupBox("实时状态")
-        status_group.setStyleSheet("QGroupBox { color: #cfd8ff; font-weight: bold; }")
+        status_group.setStyleSheet(
+            "QGroupBox { color: #1f2a44; font-weight: 600; } QGroupBox::title { left: 12px; padding: 0 4px; }"
+        )
         status_form = QFormLayout()
         status_form.addRow("当前阶段", self.stage_value)
         status_form.addRow("监控时长", self.session_value)
@@ -236,13 +242,17 @@ class SafetyMonitorWindow(QMainWindow):
         status_group.setLayout(status_form)
 
         alert_group = QGroupBox("最新报警")
-        alert_group.setStyleSheet("QGroupBox { color: #ffb0b0; font-weight: bold; }")
+        alert_group.setStyleSheet(
+            "QGroupBox { color: #b71c1c; font-weight: 600; } QGroupBox::title { left: 12px; padding: 0 4px; }"
+        )
         alert_layout = QVBoxLayout()
         alert_layout.addWidget(self.alerts_list)
         alert_group.setLayout(alert_layout)
 
         danger_group = QGroupBox("危险物品监测")
-        danger_group.setStyleSheet("QGroupBox { color: #f7d27b; font-weight: bold; }")
+        danger_group.setStyleSheet(
+            "QGroupBox { color: #8a5800; font-weight: 600; } QGroupBox::title { left: 12px; padding: 0 4px; }"
+        )
         danger_layout = QVBoxLayout()
         danger_layout.addWidget(self.danger_list)
         danger_group.setLayout(danger_layout)
@@ -395,7 +405,7 @@ class SafetyMonitorWindow(QMainWindow):
             color = toast.get('color', (0, 170, 255))
             r, g, b = color
             self.toast_label.setStyleSheet(
-                f"background-color: rgba({r}, {g}, {b}, 60); color: #e8ecff; padding: 8px; border-radius: 6px;"
+                f"background-color: rgba({r}, {g}, {b}, 60); color: #102a43; padding: 8px; border-radius: 6px;"
             )
             self.toast_label.setText(message)
             self.toast_label.show()

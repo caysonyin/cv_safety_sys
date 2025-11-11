@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import inspect
+import subprocess
 import cv2
 import numpy as np
 import torch
@@ -16,6 +18,33 @@ import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 YOLO_DIR = REPO_ROOT / "yolov7"
+YOLO_REPO_URL = "https://github.com/WongKinYiu/yolov7.git"
+
+
+def _ensure_yolov7_repo() -> None:
+    """确保 yolov7 源码存在（若缺失尝试自动克隆）。"""
+
+    if YOLO_DIR.exists():
+        return
+
+    print("未检测到 yolov7 源码目录，正在自动克隆...")
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", YOLO_REPO_URL, str(YOLO_DIR)],
+            check=True,
+            cwd=str(REPO_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        print("yolov7 仓库克隆完成。")
+    except Exception as exc:  # pragma: no cover - 依赖外部环境
+        raise ModuleNotFoundError(
+            "无法自动克隆 yolov7 仓库，请手动运行：\n"
+            f"  git clone --depth 1 {YOLO_REPO_URL} {YOLO_DIR}"
+        ) from exc
+
+
+_ensure_yolov7_repo()
 if str(YOLO_DIR) not in sys.path:
     sys.path.insert(0, str(YOLO_DIR))
 
@@ -555,13 +584,25 @@ def download_yolov7_tiny(destination: Path = DEFAULT_YOLO_MODEL_PATH) -> Optiona
         print(f"下载模型失败: {e}")
         return None
 
+def _torch_load_kwargs() -> Dict[str, object]:
+    """Return compatibility kwargs for torch.load."""
+
+    try:
+        signature = inspect.signature(torch.load)
+        if "weights_only" in signature.parameters:
+            return {"weights_only": False}
+    except (TypeError, ValueError):
+        pass
+    return {}
+
+
 def load_model(model_path: Path):
     """加载YOLOv7模型（仅 CPU）"""
     device = torch.device('cpu')
     print("使用设备: CPU")
 
     try:
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, **_torch_load_kwargs())
         model = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
         model = model.to(device).float().eval()
         print("模型加载成功")

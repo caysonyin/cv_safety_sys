@@ -173,6 +173,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.toast_expire: float = 0.0
         self.frame_count = 0
         self.last_frame_shape: Tuple[int, int, int] | None = None
+        self.active_person_alerts: Dict[int, Dict[str, object]] = {}
 
     # ------------------------------------------------------------------
     # 数据准备
@@ -266,12 +267,20 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         for person in self.person_detections:
             person['is_risky'] = False
             person['risk_messages'] = []
+            track_id = person.get('track_id')
+            if track_id is not None:
+                entry = self.active_person_alerts.get(track_id)
+                if entry:
+                    person['is_risky'] = True
+                    person['risk_messages'].extend(entry.get('messages', []))
 
         for person in self.person_detections:
             points = person.get('pose_points', [])
             bbox = person['bbox']
             person_id = person.get('track_id')
             label = f"人员 {person_id}" if person_id is not None else "人员"
+            if person_id is not None:
+                label = f"人员 ID:{person_id}"
 
             # 危险物品绑定
             for danger in self.dangerous_detections:
@@ -283,6 +292,13 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                     message = f"{label} 携带疑似 {danger['class_name']}"
                     person['is_risky'] = True
                     person['risk_messages'].append(message)
+                    if person_id is not None:
+                        self._persist_person_alert(
+                            person_id,
+                            label,
+                            message,
+                            severity="danger",
+                        )
                     alerts.append(message)
 
             # 电子栅栏入侵
@@ -293,9 +309,68 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                     message = f"{label} 侵入 {fence['label']} 安全栅栏"
                     person['is_risky'] = True
                     person['risk_messages'].append(message)
+                    if person_id is not None:
+                        self._persist_person_alert(
+                            person_id,
+                            label,
+                            message,
+                            severity="intrusion",
+                        )
                     alerts.append(message)
 
+        self._cleanup_inactive_alerts()
+
         return alerts
+
+    def _persist_person_alert(
+        self,
+        track_id: int,
+        label: str,
+        message: str,
+        *,
+        severity: str,
+    ) -> None:
+        entry = self.active_person_alerts.get(track_id)
+        if entry is None:
+            entry = {
+                'track_id': track_id,
+                'label': label,
+                'messages': [],
+                'severity': severity,
+                'created_at': time.time(),
+            }
+            self.active_person_alerts[track_id] = entry
+        entry['label'] = label
+        entry['updated_at'] = time.time()
+        existing = entry.get('messages', [])
+        if message not in existing:
+            existing.append(message)
+            entry['messages'] = existing
+        if entry.get('severity') != 'danger' and severity == 'danger':
+            entry['severity'] = 'danger'
+
+    def _cleanup_inactive_alerts(self) -> None:
+        active_ids = set(self.person_tracks.keys())
+        for track_id in list(self.active_person_alerts.keys()):
+            if track_id not in active_ids:
+                del self.active_person_alerts[track_id]
+
+    def _format_active_alerts(self) -> List[Dict[str, object]]:
+        alerts: List[Dict[str, object]] = []
+        for entry in self.active_person_alerts.values():
+            alerts.append(
+                {
+                    'track_id': entry['track_id'],
+                    'label': entry.get('label', f"人员 ID:{entry['track_id']}"),
+                    'messages': list(entry.get('messages', [])),
+                    'severity': entry.get('severity', 'intrusion'),
+                }
+            )
+        return alerts
+
+    def acknowledge_alert(self, track_id: int) -> bool:
+        removed = self.active_person_alerts.pop(track_id, None)
+        return removed is not None
 
     # ------------------------------------------------------------------
     # 绘制与展示
@@ -375,19 +450,79 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             for x, y in points:
                 cv2.circle(frame, (x, y), 3, (0, 255, 255), -1)
 
+    def _draw_label_block(
+        self,
+        frame: np.ndarray,
+        text_lines: Sequence[str],
+        origin: Tuple[int, int],
+        *,
+        color: Tuple[int, int, int],
+    ) -> None:
+        if not text_lines:
+            return
+        x, y = origin
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.55
+        thickness = 2
+        line_height = 18
+        max_width = 0
+        for line in text_lines:
+            (w, h), _ = cv2.getTextSize(line, font, font_scale, thickness)
+            max_width = max(max_width, w)
+        padding = 6
+        total_height = line_height * len(text_lines) + padding
+        bg_top = max(0, y - total_height)
+        bg_bottom = y
+        bg_right = x + max_width + padding * 2
+        cv2.rectangle(frame, (x, bg_top), (bg_right, bg_bottom), (0, 0, 0), -1)
+        for idx, line in enumerate(text_lines):
+            baseline_y = y - (len(text_lines) - idx - 1) * line_height - 6
+            cv2.putText(
+                frame,
+                line,
+                (x + 6, baseline_y),
+                font,
+                font_scale,
+                color,
+                thickness,
+                cv2.LINE_AA,
+            )
+
     def _draw_persons(self, frame: np.ndarray) -> None:
         for person in self.person_detections:
             x1, y1, x2, y2 = map(int, person['bbox'])
-            color = (0, 128, 255)
-            if person.get('is_risky'):
+            track_id = person.get('track_id')
+            is_risky = bool(person.get('is_risky'))
+            color = (60, 200, 255)
+            thickness = 2
+            if is_risky:
                 color = (0, 0, 255)
+                thickness = 4
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+            label_lines: List[str] = []
+            if track_id is not None:
+                label_lines.append(f"ID:{track_id}")
+            else:
+                label_lines.append("人员")
+            for message in person.get('risk_messages', [])[:2]:
+                label_lines.append(message)
+            self._draw_label_block(frame, label_lines, (x1, y1), color=color)
 
     def _draw_dangerous_items(self, frame: np.ndarray) -> None:
         for danger in self.dangerous_detections:
             x1, y1, x2, y2 = map(int, danger['bbox'])
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2)
+            label = danger.get('class_name', 'danger')
+            confidence = float(danger.get('confidence', 0.0))
+            text = f"{label} ({confidence:.2f})"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 80, 255), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 4)
+            self._draw_label_block(
+                frame,
+                [text],
+                (x1, max(0, y1 - 4)),
+                color=(0, 0, 255),
+            )
 
     # ------------------------------------------------------------------
     # 主流程
@@ -480,6 +615,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                 }
                 for det in self.dangerous_detections
             ],
+            'active_alerts': self._format_active_alerts(),
             'alerts': list(alerts),
             'recent_alerts': self.get_recent_alerts(),
             'total_alerts': self.total_alerts,

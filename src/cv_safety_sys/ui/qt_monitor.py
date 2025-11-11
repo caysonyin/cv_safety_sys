@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 import cv2
 import numpy as np
@@ -164,6 +164,94 @@ class VideoLabel(QLabel):
         self.setPixmap(scaled)
 
 
+class AlertBannerWidget(QWidget):
+    """可视化报警区，展示安全/报警状态与详细列表。"""
+
+    alert_selected = pyqtSignal(int, str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.icon_label = QLabel("SAFE")
+        self.icon_label.setAlignment(Qt.AlignCenter)
+        self.icon_label.setFixedSize(72, 72)
+        self.icon_label.setStyleSheet(
+            "background-color: #143027; color: #63f5a8; border-radius: 12px; font-weight: 600;"
+        )
+
+        self.headline_label = QLabel("环境安全，持续守护")
+        headline_font = self.headline_label.font()
+        headline_font.setPointSize(18)
+        headline_font.setBold(True)
+        self.headline_label.setFont(headline_font)
+        self.headline_label.setStyleSheet("color: #63f5a8;")
+
+        self.details_list = QListWidget()
+        self.details_list.setFixedHeight(140)
+        self.details_list.setStyleSheet(
+            "background-color: #11141e; border: 1px solid #1f2433; border-radius: 6px; color: #f8b4b4;"
+        )
+
+        text_layout = QVBoxLayout()
+        text_layout.addWidget(self.headline_label)
+        text_layout.addWidget(self.details_list)
+
+        root = QHBoxLayout()
+        root.setSpacing(16)
+        root.addWidget(self.icon_label)
+        root.addLayout(text_layout, stretch=1)
+        self.setLayout(root)
+        self.details_list.itemClicked.connect(self._on_item_clicked)
+        self._current_alerts: List[Dict[str, object]] = []
+
+    def update_alerts(self, alerts: Sequence[Dict[str, object]]) -> None:
+        self._current_alerts = list(alerts)
+        if self._current_alerts:
+            self._set_alert_state(self._current_alerts)
+        else:
+            self._set_safe_state()
+
+    def _set_safe_state(self) -> None:
+        self.icon_label.setText("SAFE")
+        self.icon_label.setStyleSheet(
+            "background-color: #143027; color: #63f5a8; border-radius: 12px; font-weight: 600;"
+        )
+        self.headline_label.setText("环境安全，持续守护")
+        self.headline_label.setStyleSheet("color: #63f5a8;")
+        self.details_list.clear()
+        item = QListWidgetItem("暂无报警事件。")
+        item.setForeground(QColor("#63f5a8"))
+        self.details_list.addItem(item)
+
+    def _set_alert_state(self, alerts: Sequence[Dict[str, object]]) -> None:
+        self.icon_label.setText("ALERT")
+        self.icon_label.setStyleSheet(
+            "background-color: #4c0b12; color: #ff7b8a; border-radius: 12px; font-weight: 600;"
+        )
+        self.headline_label.setText("警报触发，请立即处理")
+        self.headline_label.setStyleSheet("color: #ff7b8a;")
+        self.details_list.clear()
+        for alert in alerts:
+            messages = alert.get('messages', [])
+            label = alert.get('label', '报警')
+            summary = label
+            if messages:
+                summary += f" - {messages[0]}"
+                if len(messages) > 1:
+                    summary += f" (+{len(messages) - 1})"
+            item = QListWidgetItem(summary)
+            severity = alert.get('severity', 'intrusion')
+            color = "#ff7b8a" if severity == 'danger' else "#ffc16b"
+            item.setForeground(QColor(color))
+            item.setData(Qt.UserRole, alert.get('track_id'))
+            self.details_list.addItem(item)
+
+    def _on_item_clicked(self, item: QListWidgetItem) -> None:
+        track_id = item.data(Qt.UserRole)
+        if track_id is None:
+            return
+        self.alert_selected.emit(int(track_id), item.text())
+
+
 class MonitorWorker(QThread):
     frame_ready = pyqtSignal(np.ndarray, dict)
     alerts_emitted = pyqtSignal(list)
@@ -248,8 +336,8 @@ class SafetyMonitorWindow(QMainWindow):
 
         self.alerts_list = QListWidget()
         self.alerts_list.setStyleSheet("background-color: #1e2431; border: none; color: #ff9c9c;")
-        self.danger_list = QListWidget()
-        self.danger_list.setStyleSheet("background-color: #1e2431; border: none; color: #f7d27b;")
+        self.alert_banner = AlertBannerWidget()
+        self.alert_banner.alert_selected.connect(self.on_alert_item_clicked)
 
         self.latest_status: Dict[str, object] = {}
         self.current_frame: np.ndarray | None = None
@@ -305,11 +393,11 @@ class SafetyMonitorWindow(QMainWindow):
         alert_layout.addWidget(self.alerts_list)
         alert_group.setLayout(alert_layout)
 
-        danger_group = QGroupBox("危险物品监测")
-        danger_group.setStyleSheet("QGroupBox { color: #f7d27b; font-weight: bold; }")
-        danger_layout = QVBoxLayout()
-        danger_layout.addWidget(self.danger_list)
-        danger_group.setLayout(danger_layout)
+        banner_group = QGroupBox("报警提醒")
+        banner_group.setStyleSheet("QGroupBox { color: #f7d27b; font-weight: bold; }")
+        banner_layout = QVBoxLayout()
+        banner_layout.addWidget(self.alert_banner)
+        banner_group.setLayout(banner_layout)
 
         button_row = QHBoxLayout()
         self.start_button = QPushButton("开始监控")
@@ -332,7 +420,7 @@ class SafetyMonitorWindow(QMainWindow):
 
         sidebar.addWidget(status_group)
         sidebar.addWidget(alert_group)
-        sidebar.addWidget(danger_group)
+        sidebar.addWidget(banner_group)
         sidebar.addWidget(self.toast_label)
         sidebar.addLayout(button_row)
         sidebar.addLayout(snapshot_row)
@@ -420,6 +508,22 @@ class SafetyMonitorWindow(QMainWindow):
             return
         with self.worker.monitor_lock:
             self.monitor.handle_click(x, y)
+
+    def on_alert_item_clicked(self, track_id: int, summary: str) -> None:
+        reply = QMessageBox.question(
+            self,
+            "处理警报",
+            f"{summary}\n\n是否解除该警报并恢复常规跟踪？",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        with self.worker.monitor_lock:
+            cleared = self.monitor.acknowledge_alert(track_id)
+        if cleared:
+            QMessageBox.information(self, "完成", "已解除该警报。")
+        else:
+            QMessageBox.information(self, "提示", "未找到对应警报，可能已被解除。")
 
     def _compose_drag_bbox(self, x: int, y: int) -> List[int] | None:
         state = self._fence_drag_state
@@ -513,12 +617,7 @@ class SafetyMonitorWindow(QMainWindow):
             item = QListWidgetItem(message)
             self.alerts_list.addItem(item)
 
-        self.danger_list.clear()
-        for item in status.get('dangerous_items', []) or []:
-            label = item.get('label', '')
-            confidence = item.get('confidence', 0.0)
-            text = f"{label} ({confidence:.2f})"
-            self.danger_list.addItem(QListWidgetItem(text))
+        self.alert_banner.update_alerts(status.get('active_alerts', []))
 
         toast = status.get('toast')
         if toast and isinstance(toast, dict) and time.time() < float(toast.get('expire', 0.0)):

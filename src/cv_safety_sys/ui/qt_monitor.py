@@ -49,11 +49,19 @@ class VideoLabel(QLabel):
     """自适应缩放的视频显示组件，并支持点击映射。"""
 
     clicked = pyqtSignal(int, int)
+    pressed = pyqtSignal(int, int)
+    dragged = pyqtSignal(int, int)
+    released = pyqtSignal(int, int, bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
         self._scaled_size = QSize()
+        self._mouse_pressed = False
+        self._dragging = False
+        self._drag_threshold = 5
+        self._press_pos: tuple[int, int] | None = None
+        self._suppress_click = False
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(640, 480)
         self.setStyleSheet(
@@ -75,11 +83,54 @@ class VideoLabel(QLabel):
             self._update_pixmap()
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
-        if self._image is None:
-            return
         if event.button() != Qt.LeftButton:
             return
 
+        mapped = self._map_to_image(event.pos())
+        if mapped is None:
+            return
+        self._mouse_pressed = True
+        self._dragging = False
+        self._press_pos = mapped
+        self._suppress_click = False
+        self.pressed.emit(*mapped)
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[override]
+        if not self._mouse_pressed or not (event.buttons() & Qt.LeftButton):
+            return
+        mapped = self._map_to_image(event.pos())
+        if mapped is None:
+            return
+        if not self._dragging and self._press_pos is not None:
+            dx = abs(mapped[0] - self._press_pos[0])
+            dy = abs(mapped[1] - self._press_pos[1])
+            if max(dx, dy) >= self._drag_threshold:
+                self._dragging = True
+        if self._dragging:
+            self.dragged.emit(*mapped)
+
+    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
+        if not self._mouse_pressed:
+            return
+        mapped = self._map_to_image(event.pos())
+        if mapped is None:
+            mapped = self._press_pos
+        was_dragging = self._dragging
+        if mapped is not None:
+            self.released.emit(mapped[0], mapped[1], was_dragging)
+            if not was_dragging and not self._suppress_click:
+                self.clicked.emit(mapped[0], mapped[1])
+        self._mouse_pressed = False
+        self._dragging = False
+        self._press_pos = None
+        self._suppress_click = False
+
+    def suppress_next_click(self) -> None:
+        self._suppress_click = True
+
+    def _map_to_image(self, pos) -> tuple[int, int] | None:
+        if self._image is None:
+            return None
         label_width = self.width()
         label_height = self.height()
         scaled_width = self._scaled_size.width()
@@ -87,10 +138,13 @@ class VideoLabel(QLabel):
         offset_x = (label_width - scaled_width) / 2
         offset_y = (label_height - scaled_height) / 2
 
-        x = event.pos().x()
-        y = event.pos().y()
-        if not (offset_x <= x <= offset_x + scaled_width and offset_y <= y <= offset_y + scaled_height):
-            return
+        x = pos.x()
+        y = pos.y()
+        if not (
+            offset_x <= x <= offset_x + scaled_width
+            and offset_y <= y <= offset_y + scaled_height
+        ):
+            return None
 
         rel_x = (x - offset_x) / max(1.0, scaled_width)
         rel_y = (y - offset_y) / max(1.0, scaled_height)
@@ -99,8 +153,7 @@ class VideoLabel(QLabel):
         img_h = self._image.height()
         mapped_x = int(rel_x * img_w)
         mapped_y = int(rel_y * img_h)
-        self.clicked.emit(mapped_x, mapped_y)
-
+        return mapped_x, mapped_y
     def _update_pixmap(self) -> None:
         if self._image is None:
             self.clear()
@@ -176,6 +229,9 @@ class SafetyMonitorWindow(QMainWindow):
 
         self.video_label = VideoLabel()
         self.video_label.clicked.connect(self.on_video_clicked)
+        self.video_label.pressed.connect(self.on_video_pressed)
+        self.video_label.dragged.connect(self.on_video_dragged)
+        self.video_label.released.connect(self.on_video_released)
 
         self.stage_value = QLabel("文物选择阶段")
         self.session_value = QLabel("00:00")
@@ -198,6 +254,7 @@ class SafetyMonitorWindow(QMainWindow):
         self.latest_status: Dict[str, object] = {}
         self.current_frame: np.ndarray | None = None
         self.last_alert_sound_time = 0.0
+        self._fence_drag_state: Dict[str, object] | None = None
 
         self._setup_palette()
         central = QWidget()
@@ -323,12 +380,79 @@ class SafetyMonitorWindow(QMainWindow):
     def on_worker_error(self, message: str) -> None:
         QMessageBox.critical(self, "运行错误", message)
 
+    def on_video_pressed(self, x: int, y: int) -> None:
+        if self.latest_status.get('stage') != 'selection':
+            self._fence_drag_state = None
+            return
+        with self.worker.monitor_lock:
+            handle = self.monitor.pick_fence_handle(x, y)
+        if handle:
+            self._fence_drag_state = {
+                'track_id': handle['track_id'],
+                'hit': handle.get('hit', {}),
+                'start_bbox': list(handle['bbox']),
+            }
+            self.video_label.suppress_next_click()
+        else:
+            self._fence_drag_state = None
+
+    def on_video_dragged(self, x: int, y: int) -> None:
+        if not self._fence_drag_state:
+            return
+        new_bbox = self._compose_drag_bbox(x, y)
+        if new_bbox is None:
+            return
+        with self.worker.monitor_lock:
+            updated = self.monitor.adjust_fence_bbox(
+                self._fence_drag_state['track_id'],
+                new_bbox,
+            )
+        if updated is not None:
+            self._fence_drag_state['latest_bbox'] = updated
+
+    def on_video_released(self, x: int, y: int, was_dragging: bool) -> None:
+        if self._fence_drag_state:
+            self._fence_drag_state = None
+
     def on_video_clicked(self, x: int, y: int) -> None:
         if self.latest_status.get('stage') != 'selection':
             QMessageBox.information(self, "提示", "请先返回文物选择阶段再调整选中目标。")
             return
         with self.worker.monitor_lock:
             self.monitor.handle_click(x, y)
+
+    def _compose_drag_bbox(self, x: int, y: int) -> List[int] | None:
+        state = self._fence_drag_state
+        if not state:
+            return None
+        bbox = list(state.get('start_bbox', []))
+        if len(bbox) != 4:
+            return None
+        hit = state.get('hit', {})
+        handle_name = str(hit.get('name', ''))
+        handle_kind = hit.get('kind')
+
+        if handle_kind == 'corner':
+            if 'left' in handle_name:
+                bbox[0] = x
+            if 'right' in handle_name:
+                bbox[2] = x
+            if 'top' in handle_name:
+                bbox[1] = y
+            if 'bottom' in handle_name:
+                bbox[3] = y
+        elif handle_kind == 'edge':
+            if handle_name == 'left':
+                bbox[0] = x
+            elif handle_name == 'right':
+                bbox[2] = x
+            elif handle_name == 'top':
+                bbox[1] = y
+            elif handle_name == 'bottom':
+                bbox[3] = y
+        else:
+            return None
+        return [int(v) for v in bbox]
 
     def on_start_monitoring(self) -> None:
         with self.worker.monitor_lock:

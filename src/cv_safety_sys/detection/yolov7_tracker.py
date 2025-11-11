@@ -15,6 +15,8 @@ import cv2
 import numpy as np
 import torch
 
+from cv_safety_sys.utils import put_text
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 YOLO_DIR = REPO_ROOT / "yolov7"
@@ -82,12 +84,22 @@ DEFAULT_YOLO_MODEL_PATH = REPO_ROOT / "models" / "yolov7-tiny.pt"
 class SimpleTracker:
     """简单的目标跟踪器，基于质心距离的贪心匹配。"""
 
-    def __init__(self, max_disappeared: int = 10, max_distance: float = 100.0):
+    def __init__(
+        self,
+        max_disappeared: int = 10,
+        max_distance: float = 100.0,
+        *,
+        iou_high_threshold: float = 0.45,
+        iou_low_threshold: float = 0.2,
+    ):
         self.next_object_id = 0
         self.objects: Dict[int, Dict[str, object]] = {}
         self.disappeared: Dict[int, int] = {}
         self.max_disappeared = max_disappeared
         self.max_distance = max_distance
+        self.iou_high_threshold = iou_high_threshold
+        self.iou_low_threshold = iou_low_threshold
+        self.last_assignments: Dict[int, int] = {}
 
     def register(self, centroid, bbox):
         """注册新目标"""
@@ -107,8 +119,31 @@ class SimpleTracker:
         if object_id in self.disappeared:
             del self.disappeared[object_id]
     
+    @staticmethod
+    def _bbox_iou(box_a: Sequence[int], box_b: Sequence[int]) -> float:
+        ax1, ay1, ax2, ay2 = map(float, box_a)
+        bx1, by1, bx2, by2 = map(float, box_b)
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+        inter_w = max(0.0, inter_x2 - inter_x1)
+        inter_h = max(0.0, inter_y2 - inter_y1)
+        inter_area = inter_w * inter_h
+        area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+        area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+        denom = area_a + area_b - inter_area
+        if denom <= 0.0:
+            return 0.0
+        return float(inter_area / denom)
+
+    def get_last_assignments(self) -> Dict[int, int]:
+        """返回上一帧匹配结果（检测索引 -> track_id）。"""
+        return dict(self.last_assignments)
+
     def update(self, detections: Sequence[Dict[str, object]]):
         """更新跟踪器"""
+        self.last_assignments = {}
         if not detections:
             # 没有检测到目标，增加所有目标的消失计数
             for object_id in list(self.disappeared.keys()):
@@ -124,37 +159,69 @@ class SimpleTracker:
         ], dtype=np.float32)
 
         if not self.objects:
-            for centroid, bbox in zip(input_centroids, input_bboxes):
-                self.register(centroid, bbox)
+            assignments: Dict[int, int] = {}
+            for idx, (centroid, bbox) in enumerate(zip(input_centroids, input_bboxes)):
+                new_id = self.register(centroid, bbox)
+                assignments[idx] = new_id
+            self.last_assignments = assignments
             return self.objects
 
         object_ids = list(self.objects.keys())
         object_centroids = np.array([
             self.objects[obj_id]['centroid'] for obj_id in object_ids
         ], dtype=np.float32)
+        object_bboxes = [self.objects[obj_id]['bbox'] for obj_id in object_ids]
 
         distance_matrix = np.linalg.norm(
             object_centroids[:, np.newaxis, :] - input_centroids[np.newaxis, :, :],
             axis=2,
         )
 
+        iou_matrix = np.zeros((len(object_ids), len(input_bboxes)), dtype=np.float32)
+        for row, bbox_a in enumerate(object_bboxes):
+            for col, bbox_b in enumerate(input_bboxes):
+                iou_matrix[row, col] = self._bbox_iou(bbox_a, bbox_b)
+
         used_rows: set[int] = set()
         used_cols: set[int] = set()
+        assignments: Dict[int, int] = {}
 
-        for row in np.argsort(distance_matrix.min(axis=1)):
-            col = distance_matrix[row].argmin()
-            if row in used_rows or col in used_cols:
-                continue
-            if distance_matrix[row, col] > self.max_distance:
-                continue
-
-            object_id = object_ids[row]
-            self.objects[object_id]['centroid'] = tuple(input_centroids[col])
-            self.objects[object_id]['bbox'] = input_bboxes[col]
-            self.objects[object_id]['last_seen'] = time.time()
-            self.disappeared[object_id] = 0
+        def _assign(row: int, col: int) -> None:
+            obj_id = object_ids[row]
+            self.objects[obj_id]['centroid'] = tuple(input_centroids[col])
+            self.objects[obj_id]['bbox'] = input_bboxes[col]
+            self.objects[obj_id]['last_seen'] = time.time()
+            self.disappeared[obj_id] = 0
             used_rows.add(row)
             used_cols.add(col)
+            assignments[col] = obj_id
+
+        # 阶段1：优先匹配高IoU目标
+        high_pairs: List[Tuple[int, int, float]] = []
+        for row in range(iou_matrix.shape[0]):
+            for col in range(iou_matrix.shape[1]):
+                iou_val = float(iou_matrix[row, col])
+                if iou_val >= self.iou_high_threshold:
+                    high_pairs.append((row, col, iou_val))
+        high_pairs.sort(key=lambda item: item[2], reverse=True)
+        for row, col, _ in high_pairs:
+            if row in used_rows or col in used_cols:
+                continue
+            _assign(row, col)
+
+        # 阶段2：结合距离 + 低IoU阈值兜底
+        row_order = np.argsort(distance_matrix.min(axis=1))
+        for row in row_order:
+            if row in used_rows:
+                continue
+            col = distance_matrix[row].argmin()
+            if col in used_cols:
+                continue
+            distance = float(distance_matrix[row, col])
+            iou_val = float(iou_matrix[row, col])
+            if distance > self.max_distance and iou_val < self.iou_low_threshold:
+                continue
+            _assign(row, col)
 
         unused_rows = set(range(distance_matrix.shape[0])).difference(used_rows)
         for row in unused_rows:
@@ -165,8 +232,10 @@ class SimpleTracker:
 
         unused_cols = set(range(distance_matrix.shape[1])).difference(used_cols)
         for col in unused_cols:
-            self.register(input_centroids[col], input_bboxes[col])
+            new_id = self.register(input_centroids[col], input_bboxes[col])
+            assignments[col] = new_id
 
+        self.last_assignments = assignments
         return self.objects
 
 class VideoRelicTracker:
@@ -185,6 +254,8 @@ class VideoRelicTracker:
         self.selected_relics = set()  # 选中的文物ID
         self.relic_detections = []  # 当前帧的文物检测结果
         self.tracked_objects = {}  # 跟踪的目标
+        self.manual_fences: Dict[int, Dict[str, object]] = {}
+        self.last_frame_shape: Tuple[int, int, int] | None = None
         self.window_name = (
             window_name
             if window_name is not None
@@ -264,6 +335,7 @@ class VideoRelicTracker:
             return
         if relic_id in self.selected_relics:
             self.selected_relics.remove(relic_id)
+            self.manual_fences.pop(relic_id, None)
             print(f"取消选择文物 {relic_id}")
         else:
             self.selected_relics.add(relic_id)
@@ -274,6 +346,8 @@ class VideoRelicTracker:
         if self.selected_relics:
             self.selected_relics.clear()
             print("已清空所有选中文物")
+        if self.manual_fences:
+            self.manual_fences.clear()
 
     def handle_click(self, x: int, y: int) -> None:
         """用于交互界面处理点击事件。"""
@@ -386,6 +460,12 @@ class VideoRelicTracker:
         """更新跟踪"""
         # 更新跟踪器
         self.tracked_objects = self.tracker.update(detections)
+        assignments = self.tracker.get_last_assignments()
+        
+        if assignments:
+            for idx, detection in enumerate(detections):
+                detection['track_id'] = assignments.get(idx)
+            return
         
         if not self.tracked_objects:
             for detection in detections:
@@ -408,7 +488,7 @@ class VideoRelicTracker:
             else:
                 detection['track_id'] = None
     
-    def draw_detections(self, frame):
+    def draw_detections(self, frame, *, show_labels: bool = True):
         """绘制检测结果"""
         result_frame = frame.copy()
         
@@ -436,23 +516,30 @@ class VideoRelicTracker:
             cv2.rectangle(result_frame, (x1, y1), (x2, y2), color, thickness)
             
             # 绘制跟踪ID
-            if track_id is not None:
-                cv2.putText(
-                    result_frame, 
-                    f"ID:{track_id}", 
-                    (x1, y1 - 10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.6, 
-                    color, 
-                    2
+            if show_labels and track_id is not None:
+                put_text(
+                    result_frame,
+                    f"ID:{track_id}",
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    color,
+                    2,
                 )
             
             # 如果被选中，绘制红色电子栅栏
             if is_selected:
-                fence_info = self.calculate_safety_fence([x1, y1, x2, y2], frame.shape)
+                fence_info = self._resolve_fence_info(
+                    track_id,
+                    [x1, y1, x2, y2],
+                    frame.shape,
+                )
                 fx1, fy1, fx2, fy2 = fence_info['fence_bbox']
-                cv2.rectangle(result_frame, (fx1, fy1), (fx2, fy2), (0, 0, 255), 3)
-        
+                fence_color = (0, 0, 255)
+                if fence_info.get('manual'):
+                    fence_color = (0, 215, 255)
+                cv2.rectangle(result_frame, (fx1, fy1), (fx2, fy2), fence_color, 3)
+
         return result_frame
     
     def calculate_safety_fence(self, relic_bbox, frame_shape, safety_margin=0.3):
@@ -479,6 +566,172 @@ class VideoRelicTracker:
             'safety_margin': safety_margin,
             'fence_area': (fence_x2 - fence_x1) * (fence_y2 - fence_y1)
         }
+
+    # ------------------------------------------------------------------
+    # 电子栅栏辅助方法
+    # ------------------------------------------------------------------
+    def _minimum_fence_span(self, frame_shape: Tuple[int, int, int]) -> int:
+        h, w = frame_shape[:2]
+        base = max(8, int(min(h, w) * 0.01))
+        return max(8, base)
+
+    def _normalize_bbox(
+        self,
+        bbox: Sequence[int],
+        frame_shape: Tuple[int, int, int],
+    ) -> List[int]:
+        h, w = frame_shape[:2]
+        x1, y1, x2, y2 = map(int, bbox)
+        if x1 > x2:
+            x1, x2 = x2, x1
+        if y1 > y2:
+            y1, y2 = y2, y1
+
+        x1 = max(0, min(x1, w - 1))
+        x2 = max(0, min(x2, w))
+        y1 = max(0, min(y1, h - 1))
+        y2 = max(0, min(y2, h))
+
+        min_span = self._minimum_fence_span(frame_shape)
+        if x2 - x1 < min_span:
+            center_x = (x1 + x2) // 2
+            x1 = max(0, center_x - min_span // 2)
+            x2 = min(w, x1 + min_span)
+            if x2 - x1 < min_span:
+                x1 = max(0, x2 - min_span)
+        if y2 - y1 < min_span:
+            center_y = (y1 + y2) // 2
+            y1 = max(0, center_y - min_span // 2)
+            y2 = min(h, y1 + min_span)
+            if y2 - y1 < min_span:
+                y1 = max(0, y2 - min_span)
+
+        return [x1, y1, x2, y2]
+
+    def _resolve_fence_info(
+        self,
+        track_id: Optional[int],
+        bbox: Sequence[int],
+        frame_shape: Tuple[int, int, int],
+    ) -> Dict[str, object]:
+        fence_info = self.calculate_safety_fence(bbox, frame_shape)
+        fence_info['manual'] = False
+        if track_id is None:
+            return fence_info
+
+        manual_entry = self.manual_fences.get(track_id)
+        if not manual_entry:
+            return fence_info
+
+        manual_bbox = list(map(int, manual_entry['bbox']))
+        fence_info['fence_bbox'] = manual_bbox
+        center_x = (manual_bbox[0] + manual_bbox[2]) // 2
+        center_y = (manual_bbox[1] + manual_bbox[3]) // 2
+        fence_info['relic_center'] = [center_x, center_y]
+        fence_info['fence_area'] = max(
+            0, (manual_bbox[2] - manual_bbox[0]) * (manual_bbox[3] - manual_bbox[1])
+        )
+        fence_info['manual'] = True
+        return fence_info
+
+    def get_detection_fence_info(
+        self,
+        detection: Dict[str, object],
+        frame_shape: Tuple[int, int, int],
+    ) -> Dict[str, object]:
+        track_id = detection.get('track_id')
+        return self._resolve_fence_info(track_id, detection['bbox'], frame_shape)
+
+    def update_manual_fence(
+        self,
+        track_id: int,
+        bbox: Sequence[int],
+        *,
+        frame_shape: Tuple[int, int, int] | None = None,
+    ) -> List[int] | None:
+        if track_id not in self.selected_relics:
+            return None
+        target_shape = frame_shape or self.last_frame_shape
+        if target_shape is None:
+            return None
+
+        sanitized = self._normalize_bbox(bbox, target_shape)
+        self.manual_fences[track_id] = {
+            'bbox': sanitized,
+            'updated_at': time.time(),
+        }
+        return list(sanitized)
+
+    def get_selected_fences(
+        self,
+        frame_shape: Tuple[int, int, int] | None = None,
+    ) -> List[Dict[str, object]]:
+        target_shape = frame_shape or self.last_frame_shape
+        if target_shape is None:
+            return []
+
+        fences: List[Dict[str, object]] = []
+        for detection in self.relic_detections:
+            track_id = detection.get('track_id')
+            if track_id is None or track_id not in self.selected_relics:
+                continue
+            fence_info = self.get_detection_fence_info(detection, target_shape)
+            fences.append(
+                {
+                    'track_id': track_id,
+                    'bbox': list(fence_info['fence_bbox']),
+                    'label': detection.get('class_name', 'relic'),
+                    'manual': fence_info.get('manual', False),
+                }
+            )
+        return fences
+
+    @staticmethod
+    def _hit_test_bbox(
+        bbox: Sequence[int],
+        x: int,
+        y: int,
+        tolerance: int,
+    ) -> Dict[str, str] | None:
+        x1, y1, x2, y2 = map(int, bbox)
+        corners = {
+            'top_left': (x1, y1),
+            'top_right': (x2, y1),
+            'bottom_left': (x1, y2),
+            'bottom_right': (x2, y2),
+        }
+        for name, (cx, cy) in corners.items():
+            if abs(x - cx) <= tolerance and abs(y - cy) <= tolerance:
+                return {'kind': 'corner', 'name': name}
+
+        if y1 <= y <= y2 and abs(x - x1) <= tolerance:
+            return {'kind': 'edge', 'name': 'left'}
+        if y1 <= y <= y2 and abs(x - x2) <= tolerance:
+            return {'kind': 'edge', 'name': 'right'}
+        if x1 <= x <= x2 and abs(y - y1) <= tolerance:
+            return {'kind': 'edge', 'name': 'top'}
+        if x1 <= x <= x2 and abs(y - y2) <= tolerance:
+            return {'kind': 'edge', 'name': 'bottom'}
+
+        return None
+
+    def find_fence_handle(
+        self,
+        x: int,
+        y: int,
+        *,
+        tolerance: int = 12,
+        frame_shape: Tuple[int, int, int] | None = None,
+    ) -> Dict[str, object] | None:
+        target_shape = frame_shape or self.last_frame_shape
+        if target_shape is None:
+            return None
+
+        for fence in self.get_selected_fences(target_shape):
+            hit = self._hit_test_bbox(fence['bbox'], x, y, tolerance)
+            if hit:
+                return {**fence, 'hit': hit}
+        return None
     
     def process_video(self, video_source=0):
         """处理视频"""
@@ -504,6 +757,7 @@ class VideoRelicTracker:
                 break
             
             frame_count += 1
+            self.last_frame_shape = frame.shape
             
             # 检测文物
             all_detections = self._detect_all_objects(frame)
@@ -513,29 +767,29 @@ class VideoRelicTracker:
             self.update_tracking(self.relic_detections)
             
             # 绘制检测结果
-            result_frame = self.draw_detections(frame)
+            result_frame = self.draw_detections(frame, show_labels=True)
             
             # 显示状态信息
             status_text = f"已选择: {len(self.selected_relics)} 个文物"
-            cv2.putText(
-                result_frame, 
-                status_text, 
-                (10, 30), 
-                cv2.FONT_HERSHEY_SIMPLEX, 
-                1.0, 
-                (255, 255, 255), 
-                2
+            put_text(
+                result_frame,
+                status_text,
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (255, 255, 255),
+                2,
             )
             
             # 显示帧数
-            cv2.putText(
-                result_frame, 
-                f"Frame: {frame_count}", 
-                (10, 60), 
-                cv2.FONT_HERSHEY_SIMPLEX, 
-                0.6, 
-                (255, 255, 255), 
-                2
+            put_text(
+                result_frame,
+                f"Frame: {frame_count}",
+                (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                2,
             )
             
             # 显示图片

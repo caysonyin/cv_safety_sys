@@ -34,7 +34,6 @@ from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
 )
-from cv_safety_sys.utils import put_text
 
 
 POSE_CONNECTIONS = tuple(mp.solutions.pose.POSE_CONNECTIONS)
@@ -193,6 +192,12 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.dangerous_detections = dangers
 
         self.person_tracks = self.person_tracker.update(self.person_detections)
+        assignments = self.person_tracker.get_last_assignments()
+
+        if assignments:
+            for idx, det in enumerate(self.person_detections):
+                det['track_id'] = assignments.get(idx)
+            return
 
         if not self.person_tracks:
             for det in self.person_detections:
@@ -239,13 +244,14 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             if track_id is None or track_id not in self.selected_relics:
                 continue
 
-            fence_info = self.calculate_safety_fence(detection['bbox'], frame_shape)
+            fence_info = self.get_detection_fence_info(detection, frame_shape)
             detection['fence_info'] = fence_info
             fences.append(
                 {
                     'bbox': fence_info['fence_bbox'],
                     'track_id': track_id,
                     'label': detection.get('class_name', 'relic'),
+                    'manual': fence_info.get('manual', False),
                 }
             )
 
@@ -320,140 +326,6 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.toast_color = color
         self.toast_expire = time.time() + duration
 
-    def _render_toast(self, frame: np.ndarray) -> None:
-        if not self.toast_message or time.time() > self.toast_expire:
-            return
-
-        h, w = frame.shape[:2]
-        overlay = frame.copy()
-        box_width = min(w - 40, 520)
-        box_height = 44
-        x1 = (w - box_width) // 2
-        y1 = h - box_height - 30
-        cv2.rectangle(overlay, (x1, y1), (x1 + box_width, y1 + box_height), (20, 24, 35), -1)
-        cv2.rectangle(overlay, (x1, y1), (x1 + box_width, y1 + box_height), self.toast_color, 2)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
-        put_text(
-            frame,
-            self.toast_message,
-            (x1 + 16, y1 + 28),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            self.toast_color,
-            2,
-        )
-
-    @staticmethod
-    def _draw_header(frame: np.ndarray, stage: str) -> None:
-        h, w = frame.shape[:2]
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (w, 68), (24, 28, 40), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-        put_text(
-            frame,
-            "文物安全协同防护系统",
-            (22, 42),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.9,
-            (255, 255, 255),
-            2,
-        )
-        stage_map = {
-            "selection": "工作流阶段：文物选择",
-            "monitoring": "工作流阶段：实时监控",
-        }
-        stage_text = stage_map.get(stage, stage)
-        put_text(
-            frame,
-            stage_text,
-            (w - 320, 42),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (120, 200, 255),
-            2,
-        )
-
-    @staticmethod
-    def _draw_footer(frame: np.ndarray) -> None:
-        h, w = frame.shape[:2]
-        overlay = frame.copy()
-        footer_height = 44
-        cv2.rectangle(overlay, (0, h - footer_height), (w, h), (24, 28, 40), -1)
-        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-        instructions = (
-            "鼠标左键选中/取消 · Enter 开始监控 · R 重新选择 · S 保存画面 · ESC 退出"
-        )
-        put_text(
-            frame,
-            instructions,
-            (20, h - 12),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (200, 200, 200),
-            1,
-        )
-
-    @staticmethod
-    def _draw_info_block(
-        frame: np.ndarray,
-        top_left: Tuple[int, int],
-        width: int,
-        title: str,
-        lines: Sequence[str],
-        accent_color: Tuple[int, int, int] = (0, 170, 255),
-    ) -> None:
-        x, y = top_left
-        overlay = frame.copy()
-        line_height = 24
-        block_height = 50 + len(lines) * line_height
-        cv2.rectangle(overlay, (x, y), (x + width, y + block_height), (28, 32, 45), -1)
-        cv2.rectangle(overlay, (x, y), (x + width, y + 4), accent_color, -1)
-        cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
-
-        put_text(
-            frame,
-            title,
-            (x + 16, y + 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            2,
-        )
-
-        for idx, line in enumerate(lines):
-            put_text(
-                frame,
-                line,
-                (x + 16, y + 30 + (idx + 1) * line_height),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (210, 210, 210),
-                1,
-            )
-
-    def _draw_selection_overlay(self, frame: np.ndarray) -> None:
-        hints = [
-            "1. 通过鼠标左键点击检测框选择需要保护的文物",
-            "2. 选中文物后系统会自动生成安全电子栅栏",
-            "3. 确认无误后按 Enter 键进入实时监控阶段",
-        ]
-        self._draw_info_block(frame, (20, 90), 360, "文物选择与栅栏设定", hints)
-
-    def _format_duration(self, seconds: float) -> str:
-        seconds = max(0, int(seconds))
-        mins, secs = divmod(seconds, 60)
-        return f"{mins:02d}:{secs:02d}"
-
-    def _draw_monitoring_summary(self, frame: np.ndarray) -> None:
-        elapsed = self._format_duration(time.time() - self.session_start_time)
-        stats = [
-            f"监控时长：{elapsed}",
-            f"监控文物：{len(self.selected_relics)} 件",
-            f"在场人员：{len(self.person_detections)} 名",
-            f"累计报警：{self.total_alerts} 次",
-        ]
-        self._draw_info_block(frame, (20, 90), 320, "实时安全摘要", stats, (80, 200, 120))
-
     def _draw_active_fence_overlay(self, frame: np.ndarray) -> None:
         if not self.active_fences:
             return
@@ -467,15 +339,26 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         for fence in self.active_fences:
             x1, y1, x2, y2 = map(int, fence['bbox'])
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 120, 255), 2)
-            put_text(
-                frame,
-                f"{fence['label']} 安全区",
-                (x1 + 6, y1 + 24),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 255, 255),
-                2,
-            )
+            if self.workflow_stage == "selection":
+                handle_color = (255, 255, 255)
+                if fence.get('manual'):
+                    handle_color = (0, 255, 255)
+                corners = [
+                    (x1, y1),
+                    (x2, y1),
+                    (x1, y2),
+                    (x2, y2),
+                ]
+                edges = [
+                    ((x1 + x2) // 2, y1),
+                    ((x1 + x2) // 2, y2),
+                    (x1, (y1 + y2) // 2),
+                    (x2, (y1 + y2) // 2),
+                ]
+                for point in corners:
+                    cv2.circle(frame, point, 4, handle_color, -1)
+                for point in edges:
+                    cv2.circle(frame, point, 3, handle_color, -1)
 
     def _draw_pose(self, frame: np.ndarray, pose_entries: Sequence[PoseEntry]) -> None:
         for entry in pose_entries:
@@ -501,129 +384,10 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-            label = person.get('track_id')
-            if label is not None:
-                text = f"Person {label}"
-            else:
-                text = "Person"
-
-            put_text(
-                frame,
-                text,
-                (x1, y1 - 8),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                color,
-                2,
-            )
-
-            for idx, message in enumerate(person.get('risk_messages', [])):
-                put_text(
-                    frame,
-                    message,
-                    (x1, y2 + 20 + idx * 18),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 0, 255),
-                    1,
-                )
-
     def _draw_dangerous_items(self, frame: np.ndarray) -> None:
         for danger in self.dangerous_detections:
             x1, y1, x2, y2 = map(int, danger['bbox'])
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2)
-            label = f"{danger['class_name']} {danger['confidence']:.2f}"
-            put_text(
-                frame,
-                label,
-                (x1, max(0, y1 - 8)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 165, 255),
-                2,
-            )
-
-    def _draw_alert_panel(self, frame: np.ndarray, alerts: Sequence[str]) -> None:
-        timestamp = time.time()
-
-        for alert in alerts:
-            self.alert_history.append((timestamp, alert))
-
-        h, w = frame.shape[:2]
-        panel_width = min(340, w // 3)
-        panel_x1 = w - panel_width - 20
-        panel_y1 = 90
-        panel_x2 = w - 20
-        panel_y2 = panel_y1 + 210
-
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (panel_x1, panel_y1), (panel_x2, panel_y2), (28, 32, 45), -1)
-        cv2.rectangle(overlay, (panel_x1, panel_y1), (panel_x2, panel_y1 + 4), (0, 120, 255), -1)
-        cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
-
-        put_text(
-            frame,
-            "安全事件监控",
-            (panel_x1 + 16, panel_y1 + 32),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            2,
-        )
-
-        put_text(
-            frame,
-            f"危险物品：{len(self.dangerous_detections)}",
-            (panel_x1 + 16, panel_y1 + 64),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (210, 210, 210),
-            1,
-        )
-        put_text(
-            frame,
-            f"入侵栅栏：{self.total_intrusions}",
-            (panel_x1 + 16, panel_y1 + 88),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (210, 210, 210),
-            1,
-        )
-        put_text(
-            frame,
-            f"危险携带：{self.total_dangerous_flags}",
-            (panel_x1 + 16, panel_y1 + 112),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (210, 210, 210),
-            1,
-        )
-
-        recent_alerts = [msg for _, msg in reversed(self.alert_history)]
-        recent_alerts = recent_alerts[:4]
-
-        base_y = panel_y1 + 140
-        if recent_alerts:
-            put_text(
-                frame,
-                "实时报警:",
-                (panel_x1 + 16, base_y - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (0, 0, 255),
-                1,
-            )
-
-        for idx, msg in enumerate(recent_alerts):
-            put_text(
-                frame,
-                msg,
-                (panel_x1 + 16, base_y + idx * 22),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 170, 170),
-                1,
-            )
 
     # ------------------------------------------------------------------
     # 主流程
@@ -642,6 +406,23 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         else:
             self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
         return True
+
+    def pick_fence_handle(
+        self,
+        x: int,
+        y: int,
+        tolerance: int = 14,
+    ) -> Dict[str, object] | None:
+        """寻找距离鼠标最近的电子栅栏可拖拽点。"""
+        return self.find_fence_handle(x, y, tolerance=tolerance)
+
+    def adjust_fence_bbox(
+        self,
+        track_id: int,
+        bbox: Sequence[int],
+    ) -> List[int] | None:
+        """根据拖拽结果更新手动电子栅栏。"""
+        return self.update_manual_fence(track_id, bbox)
 
     def get_recent_alerts(self, limit: int = 4) -> List[str]:
         """返回近期报警信息。"""
@@ -670,38 +451,21 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         else:
             alerts = self._analyse_risks()
 
-        canvas = self.draw_detections(frame)
+        canvas = self.draw_detections(frame, show_labels=False)
         self._draw_active_fence_overlay(canvas)
         self._draw_pose(canvas, pose_entries)
         self._draw_persons(canvas)
         self._draw_dangerous_items(canvas)
-        self._draw_alert_panel(canvas, alerts)
 
         if alerts:
             self.total_alerts += len(alerts)
+            timestamp = time.time()
             for alert in alerts:
+                self.alert_history.append((timestamp, alert))
                 if "侵入" in alert:
                     self.total_intrusions += 1
                 if "携带" in alert:
                     self.total_dangerous_flags += 1
-
-        put_text(
-            canvas,
-            f"Frame: {self.frame_count}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (255, 255, 255),
-            2,
-        )
-
-        self._draw_header(canvas, self.workflow_stage)
-        self._draw_footer(canvas)
-        if self.workflow_stage == "selection":
-            self._draw_selection_overlay(canvas)
-        else:
-            self._draw_monitoring_summary(canvas)
-        self._render_toast(canvas)
 
         status = {
             'stage': self.workflow_stage,
@@ -722,6 +486,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             'total_intrusions': self.total_intrusions,
             'total_dangerous_flags': self.total_dangerous_flags,
             'fence_count': len(self.active_fences),
+            'manual_fence_ids': sorted(self.manual_fences.keys()),
             'session_duration': time.time() - self.session_start_time
             if self.monitoring_active
             else 0.0,
@@ -779,38 +544,21 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                 else:
                     alerts = self._analyse_risks()
 
-                canvas = self.draw_detections(frame)
+                canvas = self.draw_detections(frame, show_labels=False)
                 self._draw_active_fence_overlay(canvas)
                 self._draw_pose(canvas, pose_entries)
                 self._draw_persons(canvas)
                 self._draw_dangerous_items(canvas)
-                self._draw_alert_panel(canvas, alerts)
 
                 if alerts:
                     self.total_alerts += len(alerts)
+                    timestamp = time.time()
                     for alert in alerts:
+                        self.alert_history.append((timestamp, alert))
                         if "侵入" in alert:
                             self.total_intrusions += 1
                         if "携带" in alert:
                             self.total_dangerous_flags += 1
-
-                put_text(
-                    canvas,
-                    f"Frame: {frame_count}",
-                    (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    (255, 255, 255),
-                    2,
-                )
-
-                self._draw_header(canvas, self.workflow_stage)
-                self._draw_footer(canvas)
-                if self.workflow_stage == "selection":
-                    self._draw_selection_overlay(canvas)
-                else:
-                    self._draw_monitoring_summary(canvas)
-                self._render_toast(canvas)
 
                 cv2.imshow(self.window_name, canvas)
 

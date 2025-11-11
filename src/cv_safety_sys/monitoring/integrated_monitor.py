@@ -34,6 +34,7 @@ from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
 )
+from cv_safety_sys.utils import put_text
 
 
 POSE_CONNECTIONS = tuple(mp.solutions.pose.POSE_CONNECTIONS)
@@ -477,7 +478,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         cv2.rectangle(frame, (x, bg_top), (bg_right, bg_bottom), (0, 0, 0), -1)
         for idx, line in enumerate(text_lines):
             baseline_y = y - (len(text_lines) - idx - 1) * line_height - 6
-            cv2.putText(
+            put_text(
                 frame,
                 line,
                 (x + 6, baseline_y),

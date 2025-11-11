@@ -8,7 +8,7 @@ This module combines YOLOv7-tiny detection, centroid-based tracking, and MediaPi
 src/cv_safety_sys/
 ├── detection/yolov7_tracker.py      # YOLOv7-tiny cup detector with interactive tracking
 ├── monitoring/integrated_monitor.py # Cup fence monitoring + pose + tennis racket alerts
-└── ui/qt_monitor.py                 # PyQt5 desktop client and monitor bootstrap helpers
+└── ui/qt_monitor.py                 # PySide6 desktop client and monitor bootstrap helpers
 ```
 
 ## Final Feature Set

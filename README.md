@@ -29,7 +29,7 @@ python run.py --source 0
 # Run the integrated safety monitor (cups + tennis rackets)
 python object_protection/integrated_safety_monitor.py --source 0
 
-# Launch the PyQt desktop client with visual alerts & optional custom sound
+# Launch the PySide6 desktop client with visual alerts & optional custom sound
 python object_protection/qt_monitor_app.py --source 0 [--alert-sound path/to/sound.wav]
 ```
 
@@ -50,12 +50,12 @@ before launching `run.py` or `object_protection/qt_monitor_app.py`.
 ```
 cv_safety_sys/
 ├── models/                    # Cached pose & detector weights (auto-created)
-├── run.py                     # One-click launcher for the PyQt desktop client
+├── run.py                     # One-click launcher for the PySide6 desktop client
 ├── src/cv_safety_sys/         # Python package with reusable modules
 │   ├── detection/             # YOLOv7 tracking utilities
 │   ├── monitoring/            # Integrated safety monitor core
 │   ├── pose/                  # MediaPipe pose helpers & downloader
-│   └── ui/                    # PyQt5 desktop application
+│   └── ui/                    # PySide6 desktop application
 ├── examples/pose/             # Stand-alone pose estimation demos
 └── docs/                      # Detailed subsystem documentation
 ```

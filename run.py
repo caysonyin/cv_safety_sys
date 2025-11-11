@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from cv_safety_sys.detection.yolov7_tracker import (
     DEFAULT_YOLO_MODEL_PATH,
@@ -94,7 +94,7 @@ def main() -> None:
         alert_sound if alert_sound and alert_sound.exists() else None,
     )
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':

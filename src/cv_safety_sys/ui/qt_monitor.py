@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""本地 PyQt 可视化客户端，用于展示文物安全协同防护系统。"""
+"""基于 PySide6 的本地可视化客户端，用于展示文物安全协同防护系统。"""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from typing import Dict, List, Sequence
 
 import cv2
 import numpy as np
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QUrl
-from PyQt5.QtGui import QImage, QPixmap, QColor, QPalette
-from PyQt5.QtMultimedia import QSoundEffect
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QUrl
+from PySide6.QtGui import QImage, QPixmap, QColor, QPalette
+from PySide6.QtMultimedia import QSoundEffect
+from PySide6.QtWidgets import (
     QApplication,
     QFormLayout,
     QGroupBox,
@@ -48,10 +48,10 @@ from cv_safety_sys.detection.yolov7_tracker import (
 class VideoLabel(QLabel):
     """自适应缩放的视频显示组件，并支持点击映射。"""
 
-    clicked = pyqtSignal(int, int)
-    pressed = pyqtSignal(int, int)
-    dragged = pyqtSignal(int, int)
-    released = pyqtSignal(int, int, bool)
+    clicked = Signal(int, int)
+    pressed = Signal(int, int)
+    dragged = Signal(int, int)
+    released = Signal(int, int, bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -167,7 +167,7 @@ class VideoLabel(QLabel):
 class AlertBannerWidget(QWidget):
     """可视化报警区，展示安全/报警状态与详细列表。"""
 
-    alert_selected = pyqtSignal(int, str)
+    alert_selected = Signal(int, str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -253,9 +253,9 @@ class AlertBannerWidget(QWidget):
 
 
 class MonitorWorker(QThread):
-    frame_ready = pyqtSignal(np.ndarray, dict)
-    alerts_emitted = pyqtSignal(list)
-    error_occurred = pyqtSignal(str)
+    frame_ready = Signal(np.ndarray, dict)
+    alerts_emitted = Signal(list)
+    error_occurred = Signal(str)
 
     def __init__(
         self,
@@ -299,7 +299,7 @@ class MonitorWorker(QThread):
 
 
 class SafetyMonitorWindow(QMainWindow):
-    """PyQt 主窗口，展示实时视频与安全状态。"""
+    """PySide6 主窗口，展示实时视频与安全状态。"""
 
     def __init__(
         self,
@@ -675,7 +675,7 @@ def prepare_monitor(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="文物安全协同防护 PyQt 客户端")
+    parser = argparse.ArgumentParser(description="文物安全协同防护 PySide6 客户端")
     parser.add_argument('--source', type=str, default='0', help='视频源(0=摄像头或视频路径)')
     parser.add_argument('--conf', type=float, default=0.25, help='YOLO 置信度阈值')
     parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='姿态模型路径')
@@ -704,7 +704,7 @@ def main() -> None:
         alert_sound if alert_sound and alert_sound.exists() else None,
     )
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':

@@ -11,8 +11,6 @@
 | `pose33_realtime_optimized.py` | 多线程优化版本，包含异步处理队列、性能监控等高级特性。 |
 | `test_setup.py` | 基础环境自检工具（摄像头可用性、依赖版本）。 |
 
-更多目录结构说明可参考 `docs/webcam_pose_detection_structure.md`。
-
 ## 环境准备
 
 1. 创建 Python 3.9 环境并安装统一依赖：
@@ -46,6 +44,16 @@
 - 可选队列/多线程优化以适配复杂场景。
 - 针对 Ubuntu 桌面环境进行调优与验证。
 
+## 管线细节
+
+1. **输入**：所有脚本使用 OpenCV `VideoCapture`，并将帧统一转换为 `RGB` 再送入 MediaPipe，确保和安全联动模块的色彩通道一致。
+2. **模型加载**：`cv_safety_sys.pose.runtime.create_pose_detector` 统一管理模型句柄与缓存路径，避免每帧重复初始化。
+3. **同步策略**：
+   - `webcam_pose_simple.py` 在主线程串行执行采集与推理，保证逻辑清晰。
+   - `pose33_realtime_optimized.py` 中的 `FrameWorker` / `InferenceWorker` 通过 `queue.Queue(maxsize=2)` 解耦采集与推理，必要时主动丢弃过期帧保持实时性。
+4. **输出协议**：所有脚本都会将关键点坐标（原始像素坐标 + 可见度）与 FPS 一并返回，供 `IntegratedSafetyMonitor` 复用。
+5. **扩展接口**：通过 `--source`、`--image-width`、`--mirror` 等参数可自定义输入源、分辨率以及是否镜像显示，便于在多摄像头或立体布局中部署。
+
 ## 故障排查
 
 | 问题 | 可能原因 | 解决方案 |
@@ -57,5 +65,5 @@
 
 ## 延伸阅读
 
-- `docs/webcam_pose_detection_structure.md`：逐文件结构说明与代码导读。
+- `docs/system_architecture.md`：了解姿态模块与 YOLO/Qt 子系统之间的接口。
 - `src/cv_safety_sys/monitoring/integrated_monitor.py`：示范如何复用姿态检测结果实现多模块联动。

@@ -93,4 +93,4 @@ See [LICENSE](./LICENSE) for full terms.
 
 ## Copyright
 
-Copyright (C) 2026 Cayson
+Copyright (C) 2025 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen

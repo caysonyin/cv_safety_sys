@@ -30,6 +30,11 @@ from cv_safety_sys.detection.yolov7_tracker import (
     download_yolov7_tiny,
     load_model,
 )
+from cv_safety_sys.cloud.reporter import (
+    AlertReporter,
+    HuaweiCloudIotReporter,
+    NullAlertReporter,
+)
 from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
@@ -146,6 +151,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         pose_model_path: str,
         confidence_threshold: float = 0.1,
         create_window: bool = True,
+        alert_reporter: AlertReporter | None = None,
     ):
         super().__init__(
             model,
@@ -175,6 +181,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.frame_count = 0
         self.last_frame_shape: Tuple[int, int, int] | None = None
         self.active_person_alerts: Dict[int, Dict[str, object]] = {}
+        self.alert_reporter = alert_reporter or NullAlertReporter()
 
     # ------------------------------------------------------------------
     # 数据准备
@@ -564,6 +571,16 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         """返回近期报警信息。"""
         return [msg for _, msg in list(reversed(self.alert_history))[:limit]]
 
+    def _report_alerts(self, alerts: Sequence[str], status: Dict[str, object]) -> None:
+        """向外部系统上报报警信息。"""
+        if not alerts:
+            return
+        payload = HuaweiCloudIotReporter.build_alarm_payload(
+            alerts=alerts,
+            status=status,
+        )
+        self.alert_reporter.report(payload)
+
     def process_frame(self, frame: np.ndarray) -> Dict[str, object]:
         """处理单帧图像并返回渲染结果与状态信息。"""
 
@@ -636,6 +653,8 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             else None,
         }
 
+        self._report_alerts(alerts, status)
+
         return {
             'frame': canvas,
             'pose_entries': pose_entries,
@@ -696,6 +715,14 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                             self.total_intrusions += 1
                         if "携带" in alert:
                             self.total_dangerous_flags += 1
+                    report_status = {
+                        'total_alerts': self.total_alerts,
+                        'total_intrusions': self.total_intrusions,
+                        'total_dangerous_flags': self.total_dangerous_flags,
+                        'person_count': len(self.person_detections),
+                        'fence_count': len(self.active_fences),
+                    }
+                    self._report_alerts(alerts, report_status)
 
                 cv2.imshow(self.window_name, canvas)
 

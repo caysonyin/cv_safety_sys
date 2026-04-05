@@ -69,4 +69,4 @@ cv_safety_sys/
 └── docs/                      # 技术文档（架构 / 姿态 / 展品保护）
 ```
 
-详细技术说明请查阅 `docs/system_architecture.md`、`docs/webcam_pose_detection.md` 与 `docs/object_protection.md`。
+详细技术说明请查阅 `docs/system_architecture.md`、`docs/webcam_pose_detection.md`、`docs/object_protection.md` 与 `docs/huawei_cloud_iot_access.md`。

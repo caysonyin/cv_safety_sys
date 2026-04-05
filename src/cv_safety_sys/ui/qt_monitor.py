@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""基于 PySide6 的本地可视化客户端，用于展示文物安全协同防护系统。"""
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+# File purpose: PySide6 desktop client for live monitoring and alert interaction.
+"""PySide6 local visualization client for the integrated relic safety monitor."""
 
 from __future__ import annotations
 
@@ -46,7 +48,7 @@ from cv_safety_sys.detection.yolov7_tracker import (
 
 
 class VideoLabel(QLabel):
-    """自适应缩放的视频显示组件，并支持点击映射。"""
+    """Auto-scaling video widget with click coordinate mapping."""
 
     clicked = Signal(int, int)
     pressed = Signal(int, int)
@@ -165,7 +167,7 @@ class VideoLabel(QLabel):
 
 
 class AlertBannerWidget(QWidget):
-    """可视化报警区，展示安全/报警状态与详细列表。"""
+    """Visual alert banner showing safe/alert state and details."""
 
     alert_selected = Signal(int, str)
 
@@ -178,7 +180,7 @@ class AlertBannerWidget(QWidget):
             "background-color: #143027; color: #63f5a8; border-radius: 12px; font-weight: 600;"
         )
 
-        self.headline_label = QLabel("环境安全，持续守护")
+        self.headline_label = QLabel("Environment safe, monitoring active")
         headline_font = self.headline_label.font()
         headline_font.setPointSize(18)
         headline_font.setBold(True)
@@ -215,10 +217,10 @@ class AlertBannerWidget(QWidget):
         self.icon_label.setStyleSheet(
             "background-color: #143027; color: #63f5a8; border-radius: 12px; font-weight: 600;"
         )
-        self.headline_label.setText("环境安全，持续守护")
+        self.headline_label.setText("Environment safe, monitoring active")
         self.headline_label.setStyleSheet("color: #63f5a8;")
         self.details_list.clear()
-        item = QListWidgetItem("暂无报警事件。")
+        item = QListWidgetItem("No active alerts.")
         item.setForeground(QColor("#63f5a8"))
         self.details_list.addItem(item)
 
@@ -227,12 +229,12 @@ class AlertBannerWidget(QWidget):
         self.icon_label.setStyleSheet(
             "background-color: #4c0b12; color: #ff7b8a; border-radius: 12px; font-weight: 600;"
         )
-        self.headline_label.setText("警报触发，请立即处理")
+        self.headline_label.setText("Alert triggered, immediate attention required")
         self.headline_label.setStyleSheet("color: #ff7b8a;")
         self.details_list.clear()
         for alert in alerts:
             messages = alert.get('messages', [])
-            label = alert.get('label', '报警')
+            label = alert.get('label', 'Alert')
             summary = label
             if messages:
                 summary += f" - {messages[0]}"
@@ -272,7 +274,7 @@ class MonitorWorker(QThread):
     def run(self) -> None:  # type: ignore[override]
         cap = cv2.VideoCapture(self.video_source)
         if not cap.isOpened():
-            self.error_occurred.emit(f"无法打开视频源: {self.video_source}")
+            self.error_occurred.emit(f"Failed to open video source: {self.video_source}")
             return
 
         self._running = True
@@ -299,7 +301,7 @@ class MonitorWorker(QThread):
 
 
 class SafetyMonitorWindow(QMainWindow):
-    """PySide6 主窗口，展示实时视频与安全状态。"""
+    """PySide6 main window for live video and safety status."""
 
     def __init__(
         self,
@@ -321,7 +323,7 @@ class SafetyMonitorWindow(QMainWindow):
         self.video_label.dragged.connect(self.on_video_dragged)
         self.video_label.released.connect(self.on_video_released)
 
-        self.stage_value = QLabel("文物选择阶段")
+        self.stage_value = QLabel("Relic selection stage")
         self.session_value = QLabel("00:00")
         self.person_value = QLabel("0")
         self.relic_value = QLabel("0")
@@ -348,7 +350,7 @@ class SafetyMonitorWindow(QMainWindow):
         central = QWidget()
         central.setLayout(self._build_layout())
         self.setCentralWidget(central)
-        self.setWindowTitle("文物安全协同防护 - 本地客户端")
+        self.setWindowTitle("Integrated Relic Safety - Local Client")
         self.resize(1280, 720)
 
         self.sound_effect: QSoundEffect | None = None
@@ -373,47 +375,47 @@ class SafetyMonitorWindow(QMainWindow):
         sidebar = QVBoxLayout()
         sidebar.setSpacing(16)
 
-        status_group = QGroupBox("实时状态")
+        status_group = QGroupBox("Live status")
         status_group.setStyleSheet("QGroupBox { color: #cfd8ff; font-weight: bold; }")
         status_form = QFormLayout()
-        status_form.addRow("当前阶段", self.stage_value)
-        status_form.addRow("监控时长", self.session_value)
-        status_form.addRow("在场人员", self.person_value)
-        status_form.addRow("监控文物", self.relic_value)
-        status_form.addRow("文物编号", self.relic_ids_value)
-        status_form.addRow("活动栅栏", self.fence_value)
-        status_form.addRow("累计报警", self.alert_total_value)
-        status_form.addRow("栅栏入侵", self.intrusion_value)
-        status_form.addRow("危险携带", self.dangerous_value)
+        status_form.addRow("Current stage", self.stage_value)
+        status_form.addRow("Monitoring duration", self.session_value)
+        status_form.addRow("People present", self.person_value)
+        status_form.addRow("Protected relics", self.relic_value)
+        status_form.addRow("Relic IDs", self.relic_ids_value)
+        status_form.addRow("Active fences", self.fence_value)
+        status_form.addRow("Total alerts", self.alert_total_value)
+        status_form.addRow("Fence intrusions", self.intrusion_value)
+        status_form.addRow("Danger-carry events", self.dangerous_value)
         status_group.setLayout(status_form)
 
-        alert_group = QGroupBox("最新报警")
+        alert_group = QGroupBox("Latest alerts")
         alert_group.setStyleSheet("QGroupBox { color: #ffb0b0; font-weight: bold; }")
         alert_layout = QVBoxLayout()
         alert_layout.addWidget(self.alerts_list)
         alert_group.setLayout(alert_layout)
 
-        banner_group = QGroupBox("报警提醒")
+        banner_group = QGroupBox("Alert banner")
         banner_group.setStyleSheet("QGroupBox { color: #f7d27b; font-weight: bold; }")
         banner_layout = QVBoxLayout()
         banner_layout.addWidget(self.alert_banner)
         banner_group.setLayout(banner_layout)
 
         button_row = QHBoxLayout()
-        self.start_button = QPushButton("开始监控")
+        self.start_button = QPushButton("Start Monitoring")
         self.start_button.clicked.connect(self.on_start_monitoring)
-        self.reset_button = QPushButton("返回选择")
+        self.reset_button = QPushButton("Back to Selection")
         self.reset_button.clicked.connect(self.on_reset_selection)
-        self.clear_button = QPushButton("清空选中")
+        self.clear_button = QPushButton("Clear Selection")
         self.clear_button.clicked.connect(self.on_clear_selection)
         button_row.addWidget(self.start_button)
         button_row.addWidget(self.reset_button)
         button_row.addWidget(self.clear_button)
 
         snapshot_row = QHBoxLayout()
-        self.snapshot_button = QPushButton("保存快照")
+        self.snapshot_button = QPushButton("Save Snapshot")
         self.snapshot_button.clicked.connect(self.on_save_snapshot)
-        self.exit_button = QPushButton("退出")
+        self.exit_button = QPushButton("Exit")
         self.exit_button.clicked.connect(self.close)
         snapshot_row.addWidget(self.snapshot_button)
         snapshot_row.addWidget(self.exit_button)
@@ -466,7 +468,7 @@ class SafetyMonitorWindow(QMainWindow):
             QApplication.beep()
 
     def on_worker_error(self, message: str) -> None:
-        QMessageBox.critical(self, "运行错误", message)
+        QMessageBox.critical(self, "Runtime Error", message)
 
     def on_video_pressed(self, x: int, y: int) -> None:
         if self.latest_status.get('stage') != 'selection':
@@ -504,7 +506,7 @@ class SafetyMonitorWindow(QMainWindow):
 
     def on_video_clicked(self, x: int, y: int) -> None:
         if self.latest_status.get('stage') != 'selection':
-            QMessageBox.information(self, "提示", "请先返回文物选择阶段再调整选中目标。")
+            QMessageBox.information(self, "Notice", "Return to relic selection stage before adjusting selected targets.")
             return
         with self.worker.monitor_lock:
             self.monitor.handle_click(x, y)
@@ -512,8 +514,8 @@ class SafetyMonitorWindow(QMainWindow):
     def on_alert_item_clicked(self, track_id: int, summary: str) -> None:
         reply = QMessageBox.question(
             self,
-            "处理警报",
-            f"{summary}\n\n是否解除该警报并恢复常规跟踪？",
+            "Handle Alert",
+            f"{summary}\n\nDismiss this alert and return to normal tracking?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -521,9 +523,9 @@ class SafetyMonitorWindow(QMainWindow):
         with self.worker.monitor_lock:
             cleared = self.monitor.acknowledge_alert(track_id)
         if cleared:
-            QMessageBox.information(self, "完成", "已解除该警报。")
+            QMessageBox.information(self, "Done", "Alert dismissed.")
         else:
-            QMessageBox.information(self, "提示", "未找到对应警报，可能已被解除。")
+            QMessageBox.information(self, "Notice", "Matching alert not found (it may already be dismissed).")
 
     def _compose_drag_bbox(self, x: int, y: int) -> List[int] | None:
         state = self._fence_drag_state
@@ -575,7 +577,7 @@ class SafetyMonitorWindow(QMainWindow):
 
     def on_save_snapshot(self) -> None:
         if self.current_frame is None:
-            QMessageBox.information(self, "提示", "暂无可保存的画面。")
+            QMessageBox.information(self, "Notice", "No frame available to save.")
             return
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         output_dir = Path("snapshots")
@@ -583,7 +585,7 @@ class SafetyMonitorWindow(QMainWindow):
         filename = output_dir / f"snapshot_{timestamp}.jpg"
         bgr_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR)
         cv2.imwrite(str(filename), bgr_frame)
-        QMessageBox.information(self, "保存成功", f"已保存到 {filename}")
+        QMessageBox.information(self, "Saved", f"Saved to {filename}")
 
     def _format_duration(self, seconds: float) -> str:
         seconds = max(0, int(seconds))
@@ -592,8 +594,8 @@ class SafetyMonitorWindow(QMainWindow):
 
     def _update_status_panel(self, status: Dict[str, object]) -> None:
         stage_map = {
-            'selection': "文物选择阶段",
-            'monitoring': "实时监控阶段",
+            'selection': "Relic selection stage",
+            'monitoring': "Live monitoring stage",
         }
         stage = status.get('stage', 'selection')
         self.stage_value.setText(stage_map.get(stage, str(stage)))
@@ -648,7 +650,7 @@ def prepare_monitor(
     if pose_model_path is None or not pose_model_path.exists():
         downloaded = download_pose_model(pose_model_path)
         if downloaded is None:
-            raise RuntimeError("无法下载姿态模型，请检查网络连接或手动放置模型到 models/ 目录")
+            raise RuntimeError("Failed to download pose model. Check network or place it in models/.")
         pose_model_path = Path(downloaded)
 
     model_path = yolo_model if yolo_model and yolo_model.exists() else None
@@ -658,11 +660,11 @@ def prepare_monitor(
     target_model = model_path or DEFAULT_YOLO_MODEL_PATH
     model_path = download_yolov7_tiny(target_model)
     if model_path is None:
-        raise RuntimeError("无法准备YOLO模型")
+        raise RuntimeError("Failed to prepare YOLO model")
 
     model, device = load_model(model_path)
     if model is None or device is None:
-        raise RuntimeError("模型加载失败")
+        raise RuntimeError("Model loading failed")
 
     monitor = IntegratedSafetyMonitor(
         model,
@@ -675,12 +677,12 @@ def prepare_monitor(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="文物安全协同防护 PySide6 客户端")
-    parser.add_argument('--source', type=str, default='0', help='视频源(0=摄像头或视频路径)')
-    parser.add_argument('--conf', type=float, default=0.25, help='YOLO 置信度阈值')
-    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='姿态模型路径')
-    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO 模型路径')
-    parser.add_argument('--alert-sound', type=str, default=None, help='报警提示音文件路径（可选）')
+    parser = argparse.ArgumentParser(description="Integrated relic safety PySide6 client")
+    parser.add_argument('--source', type=str, default='0', help='Video source (0 for webcam or video path)')
+    parser.add_argument('--conf', type=float, default=0.25, help='YOLO Confidence threshold')
+    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='Pose model path')
+    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO model path')
+    parser.add_argument('--alert-sound', type=str, default=None, help='Optional alert sound file path')
     return parser.parse_args()
 
 

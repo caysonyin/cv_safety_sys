@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""一键启动文物安全协同防护客户端，并自动校验模型资源。"""
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+# File purpose: One-command launcher for the integrated safety monitoring desktop client.
+"""Launch the integrated relic safety client and validate required model resources."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
+
 REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
-
 
 from PySide6.QtWidgets import QApplication
 
@@ -24,12 +26,11 @@ from cv_safety_sys.pose.model_downloader import (
 from cv_safety_sys.ui.qt_monitor import SafetyMonitorWindow, prepare_monitor
 
 
-REPO_ROOT = Path(__file__).resolve().parent
 YOLO_REPO_URL = "https://github.com/WongKinYiu/yolov7.git"
 
 
 def ensure_pose_model(path: Path) -> Path:
-    """确保姿态模型存在。"""
+    """Ensure that the pose model exists."""
 
     if path.exists():
         return path
@@ -37,40 +38,40 @@ def ensure_pose_model(path: Path) -> Path:
     downloaded = download_pose_model(path)
     if downloaded is None:
         raise RuntimeError(
-            "无法下载姿态模型，请检查网络连接或手动放置模型到 models/ 目录"
+            "Failed to download the pose model. Check your network or place it in models/."
         )
     return Path(downloaded)
 
 
 def ensure_yolo_model(path: Path) -> Path:
-    """确保 YOLOv7-tiny 模型存在。"""
+    """Ensure that the YOLOv7-tiny model exists."""
 
     downloaded = download_yolov7_tiny(path)
     if downloaded is None:
         raise RuntimeError(
-            "无法准备YOLO模型，请确认网络连接或手动将权重放到 models/ 目录"
+            "Failed to prepare the YOLO model. Check your network or place weights in models/."
         )
     return downloaded
 
 
 def check_yolov7_repo() -> None:
-    """简单检测 YOLOv7 源码目录是否存在。"""
+    """Verify that the local yolov7 source directory exists."""
 
     yolo_dir = REPO_ROOT / "yolov7"
     if not yolo_dir.exists():
         raise RuntimeError(
-            "未找到 yolov7 源码目录，请先运行\n"
+            "Missing local yolov7 source directory. Run:\n"
             f"  git clone --depth 1 {YOLO_REPO_URL} yolov7"
         )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="文物安全协同防护客户端入口")
-    parser.add_argument('--source', type=str, default='0', help='视频源(0=摄像头或视频路径)')
-    parser.add_argument('--conf', type=float, default=0.25, help='YOLO 置信度阈值')
-    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='姿态模型路径')
-    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO 模型路径')
-    parser.add_argument('--alert-sound', type=str, default=None, help='报警提示音文件路径（可选）')
+    parser = argparse.ArgumentParser(description="Integrated relic safety client entrypoint")
+    parser.add_argument('--source', type=str, default='0', help='Video source (0 for webcam or a video path)')
+    parser.add_argument('--conf', type=float, default=0.25, help='YOLO confidence threshold')
+    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='Pose model path')
+    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO model path')
+    parser.add_argument('--alert-sound', type=str, default=None, help='Optional alert sound file path')
     return parser.parse_args()
 
 

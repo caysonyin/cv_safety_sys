@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
+<!-- File purpose: Pose module usage, model handling, and runtime guidance. -->
+
 # Pose Detection Module Guide
 
 The repository uses **MediaPipe Tasks Pose Landmarker** for pose estimation.

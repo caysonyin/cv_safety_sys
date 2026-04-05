@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
+<!-- File purpose: High-level architecture, module boundaries, and data flow. -->
+
 # System Architecture
 
 This project performs real-time safety monitoring by combining **protected relics, human pose landmarks, and dangerous objects**.

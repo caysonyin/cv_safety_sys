@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""基于YOLOv7-tiny的文物检测与跟踪工具集。"""
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+# File purpose: YOLOv7 detection, relic tracking, and interactive fence selection.
+"""YOLOv7-tiny based relic detection and tracking toolkit."""
 
 from __future__ import annotations
 
@@ -24,12 +26,12 @@ YOLO_REPO_URL = "https://github.com/WongKinYiu/yolov7.git"
 
 
 def _ensure_yolov7_repo() -> None:
-    """确保 yolov7 源码存在（若缺失尝试自动克隆）。"""
+    """Ensure local yolov7 source exists (auto-clone if missing)."""
 
     if YOLO_DIR.exists():
         return
 
-    print("未检测到 yolov7 源码目录，正在自动克隆...")
+    print("Local yolov7 source not found, cloning automatically...")
     try:
         subprocess.run(
             ["git", "clone", "--depth", "1", YOLO_REPO_URL, str(YOLO_DIR)],
@@ -38,10 +40,10 @@ def _ensure_yolov7_repo() -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        print("yolov7 仓库克隆完成。")
-    except Exception as exc:  # pragma: no cover - 依赖外部环境
+        print("yolov7 repository cloned successfully.")
+    except Exception as exc:  # pragma: no cover - depends on external environment
         raise ModuleNotFoundError(
-            "无法自动克隆 yolov7 仓库，请手动运行：\n"
+            "Failed to auto-clone yolov7. Please run manually:\n"
             f"  git clone --depth 1 {YOLO_REPO_URL} {YOLO_DIR}"
         ) from exc
 
@@ -50,9 +52,9 @@ _ensure_yolov7_repo()
 if str(YOLO_DIR) not in sys.path:
     sys.path.insert(0, str(YOLO_DIR))
 
-try:  # 优先使用本地yolov7工具函数
+try:  # Prefer local yolov7 utility functions first
     from utils.general import non_max_suppression, scale_coords
-except ModuleNotFoundError:  # pragma: no cover - 兼容子目录结构
+except ModuleNotFoundError:  # pragma: no cover - Compatibility with nested directory layouts
     from yolov7.utils.general import non_max_suppression, scale_coords  # type: ignore
 
 
@@ -82,7 +84,7 @@ MEDIUM_ANTIQUITY_CLASSES = {'teddy bear', 'potted plant'}
 DEFAULT_YOLO_MODEL_PATH = REPO_ROOT / "models" / "yolov7-tiny.pt"
 
 class SimpleTracker:
-    """简单的目标跟踪器，基于质心距离的贪心匹配。"""
+    """Simple object tracker using greedy centroid-distance matching."""
 
     def __init__(
         self,
@@ -102,7 +104,7 @@ class SimpleTracker:
         self.last_assignments: Dict[int, int] = {}
 
     def register(self, centroid, bbox):
-        """注册新目标"""
+        """Register a new object"""
         self.objects[self.next_object_id] = {
             'centroid': tuple(centroid),
             'bbox': list(bbox),
@@ -113,7 +115,7 @@ class SimpleTracker:
         return self.next_object_id - 1
 
     def deregister(self, object_id):
-        """注销目标"""
+        """Deregister an object"""
         if object_id in self.objects:
             del self.objects[object_id]
         if object_id in self.disappeared:
@@ -138,14 +140,14 @@ class SimpleTracker:
         return float(inter_area / denom)
 
     def get_last_assignments(self) -> Dict[int, int]:
-        """返回上一帧匹配结果（检测索引 -> track_id）。"""
+        """Return previous-frame assignment mapping (detection index -> track_id)."""
         return dict(self.last_assignments)
 
     def update(self, detections: Sequence[Dict[str, object]]):
-        """更新跟踪器"""
+        """Update tracker"""
         self.last_assignments = {}
         if not detections:
-            # 没有检测到目标，增加所有目标的消失计数
+            # No detections found; increment disappearance counters.
             for object_id in list(self.disappeared.keys()):
                 self.disappeared[object_id] += 1
                 if self.disappeared[object_id] > self.max_disappeared:
@@ -196,7 +198,7 @@ class SimpleTracker:
             used_cols.add(col)
             assignments[col] = obj_id
 
-        # 阶段1：优先匹配高IoU目标
+        # Stage 1: prioritize high-IoU matches
         high_pairs: List[Tuple[int, int, float]] = []
         for row in range(iou_matrix.shape[0]):
             for col in range(iou_matrix.shape[1]):
@@ -209,7 +211,7 @@ class SimpleTracker:
                 continue
             _assign(row, col)
 
-        # 阶段2：结合距离 + 低IoU阈值兜底
+        # Stage 2: distance-based fallback with relaxed IoU
         row_order = np.argsort(distance_matrix.min(axis=1))
         for row in row_order:
             if row in used_rows:
@@ -251,26 +253,26 @@ class VideoRelicTracker:
         self.model = model
         self.device = device
         self.tracker = SimpleTracker(max_disappeared=10)
-        self.selected_relics = set()  # 选中的文物ID
-        self.relic_detections = []  # 当前帧的文物检测结果
-        self.tracked_objects = {}  # 跟踪的目标
+        self.selected_relics = set()  # Selected relic IDs
+        self.relic_detections = []  # Current-frame relic detections
+        self.tracked_objects = {}  # Tracked objects
         self.manual_fences: Dict[int, Dict[str, object]] = {}
         self.last_frame_shape: Tuple[int, int, int] | None = None
         self.window_name = (
             window_name
             if window_name is not None
-            else "文物跟踪系统 - 点击选择文物，按Enter确认，按ESC退出"
+            else "Relic Tracker - click to select, Enter to confirm, ESC to quit"
         )
         self.confidence_threshold = confidence_threshold
         self._create_window = create_window
 
-        # 创建窗口
+        # Create window
         if self._create_window:
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
             cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
     def _prepare_image(self, frame: np.ndarray) -> torch.Tensor:
-        """预处理输入图像以便进行模型推理"""
+        """Preprocess input image for model inference"""
         resized = cv2.resize(frame, (640, 640))
         rgb_image = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         tensor = torch.from_numpy(rgb_image.astype(np.float32) / 255.0)
@@ -317,12 +319,12 @@ class VideoRelicTracker:
         return min(score, 1.0)
 
     def mouse_callback(self, event, x, y, flags, param):
-        """鼠标回调函数"""
+        """Mouse callback"""
         if event == cv2.EVENT_LBUTTONDOWN:
             self.handle_click(x, y)
 
     def get_clicked_relic(self, x, y):
-        """获取点击的文物ID"""
+        """Get relic ID at clicked position"""
         for detection in self.relic_detections:
             x1, y1, x2, y2 = detection['bbox']
             if x1 <= x <= x2 and y1 <= y <= y2:
@@ -330,33 +332,33 @@ class VideoRelicTracker:
         return None
 
     def toggle_relic_selection(self, relic_id: Optional[int]) -> None:
-        """根据给定的ID切换文物选中状态。"""
+        """Toggle relic selection state by ID."""
         if relic_id is None:
             return
         if relic_id in self.selected_relics:
             self.selected_relics.remove(relic_id)
             self.manual_fences.pop(relic_id, None)
-            print(f"取消选择文物 {relic_id}")
+            print(f"Deselected relic {relic_id}")
         else:
             self.selected_relics.add(relic_id)
-            print(f"选择文物 {relic_id}")
+            print(f"Selected relic {relic_id}")
 
     def clear_selection(self) -> None:
-        """取消所有选中的文物。"""
+        """Clear all selected relics."""
         if self.selected_relics:
             self.selected_relics.clear()
-            print("已清空所有选中文物")
+            print("Cleared all selected relics")
         if self.manual_fences:
             self.manual_fences.clear()
 
     def handle_click(self, x: int, y: int) -> None:
-        """用于交互界面处理点击事件。"""
+        """Handle click event for interactive UI."""
         clicked_relic = self.get_clicked_relic(x, y)
         if clicked_relic is not None:
             self.toggle_relic_selection(clicked_relic)
     
     def _detect_all_objects(self, frame: np.ndarray) -> List[Dict[str, object]]:
-        """运行一次YOLO检测并返回所有检测结果。"""
+        """Run one YOLO inference pass and return detections."""
         image_tensor = self._prepare_image(frame)
 
         with torch.no_grad():
@@ -409,10 +411,10 @@ class VideoRelicTracker:
         frame: np.ndarray,
         detections: Optional[Sequence[Dict[str, object]]] = None,
     ) -> List[Dict[str, object]]:
-        """检测文物"""
+        """Detect relics"""
         h, w = frame.shape[:2]
 
-        # 分析图片特征
+        # Analyze image features
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         bronze_mask = cv2.inRange(hsv, np.array([10, 50, 50]), np.array([30, 255, 255]))
         bronze_ratio = float(np.count_nonzero(bronze_mask)) / (h * w)
@@ -457,8 +459,8 @@ class VideoRelicTracker:
         return relic_detections
     
     def update_tracking(self, detections):
-        """更新跟踪"""
-        # 更新跟踪器
+        """Update tracking"""
+        # Update tracker
         self.tracked_objects = self.tracker.update(detections)
         assignments = self.tracker.get_last_assignments()
         
@@ -489,7 +491,7 @@ class VideoRelicTracker:
                 detection['track_id'] = None
     
     def draw_detections(self, frame, *, show_labels: bool = True):
-        """绘制检测结果"""
+        """Render detection results"""
         result_frame = frame.copy()
         
         for detection in self.relic_detections:
@@ -497,25 +499,25 @@ class VideoRelicTracker:
             track_id = detection.get('track_id', None)
             is_selected = track_id in self.selected_relics if track_id is not None else False
             
-            # 确保坐标在图片范围内
+            # Clamp coordinates to image bounds
             h, w = frame.shape[:2]
             x1 = max(0, min(x1, w-1))
             y1 = max(0, min(y1, h-1))
             x2 = max(x1+1, min(x2, w))
             y2 = max(y1+1, min(y2, h))
             
-            # 选择颜色和样式
+            # Choose drawing color and style
             if is_selected:
-                color = (0, 255, 0)  # 绿色
+                color = (0, 255, 0)  # Green
                 thickness = 4
             else:
-                color = (0, 0, 255)  # 红色
+                color = (0, 0, 255)  # Red
                 thickness = 2
             
-            # 绘制边界框
+            # Draw bounding box
             cv2.rectangle(result_frame, (x1, y1), (x2, y2), color, thickness)
             
-            # 绘制跟踪ID
+            # Draw track ID
             if show_labels and track_id is not None:
                 put_text(
                     result_frame,
@@ -527,7 +529,7 @@ class VideoRelicTracker:
                     2,
                 )
             
-            # 如果被选中，绘制红色电子栅栏
+            # If selected, draw red safety fence
             if is_selected:
                 fence_info = self._resolve_fence_info(
                     track_id,
@@ -543,7 +545,7 @@ class VideoRelicTracker:
         return result_frame
     
     def calculate_safety_fence(self, relic_bbox, frame_shape, safety_margin=0.3):
-        """计算文物的安全栅栏范围"""
+        """Compute safety fence region for relic"""
         x1, y1, x2, y2 = relic_bbox
         h, w = frame_shape[:2]
         
@@ -568,7 +570,7 @@ class VideoRelicTracker:
         }
 
     # ------------------------------------------------------------------
-    # 电子栅栏辅助方法
+    # Safety fence helper methods
     # ------------------------------------------------------------------
     def _minimum_fence_span(self, frame_shape: Tuple[int, int, int]) -> int:
         h, w = frame_shape[:2]
@@ -734,20 +736,20 @@ class VideoRelicTracker:
         return None
     
     def process_video(self, video_source=0):
-        """处理视频"""
+        """Process video"""
         cap = cv2.VideoCapture(video_source)
         
         if not cap.isOpened():
-            print(f"无法打开视频源: {video_source}")
+            print(f"Failed to open video source: {video_source}")
             return
         
-        print("=== 视频文物跟踪系统 ===")
-        print("操作说明:")
-        print("1. 点击红色框选择文物")
-        print("2. 点击绿色框取消选择")
-        print("3. 按Enter键确认选择")
-        print("4. 按ESC键退出")
-        print("5. 按S键保存当前帧")
+        print("=== Relic Video Tracking System ===")
+        print("Controls:")
+        print("1. Click a red box to select a relic")
+        print("2. Click a green box to deselect")
+        print("3. Press Enter to confirm selection")
+        print("4. Press ESC to exit")
+        print("5. Press S to save current frame")
         
         frame_count = 0
         
@@ -759,18 +761,18 @@ class VideoRelicTracker:
             frame_count += 1
             self.last_frame_shape = frame.shape
             
-            # 检测文物
+            # Detect relics
             all_detections = self._detect_all_objects(frame)
             self.relic_detections = self.detect_relics(frame, all_detections)
 
-            # 更新跟踪
+            # Update tracking
             self.update_tracking(self.relic_detections)
             
-            # 绘制检测结果
+            # Render detection results
             result_frame = self.draw_detections(frame, show_labels=True)
             
-            # 显示状态信息
-            status_text = f"已选择: {len(self.selected_relics)} 个文物"
+            # Show status info
+            status_text = f"Selected: {len(self.selected_relics)} relic(s)"
             put_text(
                 result_frame,
                 status_text,
@@ -781,7 +783,7 @@ class VideoRelicTracker:
                 2,
             )
             
-            # 显示帧数
+            # Show frame count
             put_text(
                 result_frame,
                 f"Frame: {frame_count}",
@@ -792,34 +794,34 @@ class VideoRelicTracker:
                 2,
             )
             
-            # 显示图片
+            # Display frame
             cv2.imshow(self.window_name, result_frame)
             
-            # 处理按键
+            # Handle keyboard input
             key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC键
+            if key == 27:  # ESC key
                 break
-            elif key == 13:  # Enter键
-                print(f"确认选择 {len(self.selected_relics)} 个文物")
-            elif key == ord('s') or key == ord('S'):  # S键保存
+            elif key == 13:  # Enter key
+                print(f"Confirmed selection of {len(self.selected_relics)} relic(s)")
+            elif key == ord('s') or key == ord('S'):  # S key to save
                 filename = f"tracking_frame_{frame_count}.jpg"
                 cv2.imwrite(filename, result_frame)
-                print(f"保存帧到: {filename}")
+                print(f"Saved frame to: {filename}")
         
         cap.release()
         cv2.destroyAllWindows()
 
 def download_yolov7_tiny(destination: Path = DEFAULT_YOLO_MODEL_PATH) -> Optional[Path]:
-    """下载YOLOv7-tiny预训练模型到``models/``目录。"""
+    """Download YOLOv7-tiny pretrained weights to ``models/``."""
 
     model_url = "https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt"
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     if destination.exists():
-        print(f"模型文件已存在: {destination}")
+        print(f"Model already exists: {destination}")
         return destination
 
-    print("正在下载YOLOv7-tiny模型...")
+    print("Downloading YOLOv7-tiny model...")
     try:
         import requests
 
@@ -832,10 +834,10 @@ def download_yolov7_tiny(destination: Path = DEFAULT_YOLO_MODEL_PATH) -> Optiona
                     continue
                 file.write(chunk)
 
-        print(f"模型下载完成: {destination}")
+        print(f"Model download completed: {destination}")
         return destination
     except Exception as e:
-        print(f"下载模型失败: {e}")
+        print(f"Model download failed: {e}")
         return None
 
 def _torch_load_kwargs() -> Dict[str, object]:
@@ -851,54 +853,54 @@ def _torch_load_kwargs() -> Dict[str, object]:
 
 
 def load_model(model_path: Path):
-    """加载YOLOv7模型（仅 CPU）"""
+    """Load YOLOv7 model (CPU only)"""
     device = torch.device('cpu')
-    print("使用设备: CPU")
+    print("Using device: CPU")
 
     try:
         checkpoint = torch.load(model_path, map_location=device, **_torch_load_kwargs())
         model = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
         model = model.to(device).float().eval()
-        print("模型加载成功")
+        print("Model loaded successfully")
         return model, device
     except Exception as e:
-        print(f"模型加载失败: {e}")
+        print(f"Model loading failed: {e}")
         return None, None
 
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description='视频文物跟踪系统')
-    parser.add_argument('--source', type=str, default='0', help='视频源 (0=摄像头, 或视频文件路径)')
-    parser.add_argument('--conf', type=float, default=0.1, help='置信度阈值')
-    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO 模型路径')
+    parser = argparse.ArgumentParser(description='Relic Video Tracking System')
+    parser.add_argument('--source', type=str, default='0', help='Video source (0 for webcam, or a video file path)')
+    parser.add_argument('--conf', type=float, default=0.1, help='Confidence threshold')
+    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO model path')
     
     args = parser.parse_args()
     
-    print("=== 视频文物跟踪系统 ===")
-    print("实时检测、选择和跟踪文物")
+    print("=== Relic Video Tracking System ===")
+    print("Real-time relic detection, selection, and tracking")
     
-    # 下载模型
+    # Download model
     model_path = download_yolov7_tiny(Path(args.yolo_model))
     if model_path is None:
         return
 
-    # 加载模型
+    # Load model
     model, device = load_model(model_path)
     if model is None:
         return
 
-    # 创建跟踪器
+    # Create tracker
     tracker = VideoRelicTracker(model, device, confidence_threshold=args.conf)
     
-    # 处理视频
+    # Process video
     try:
         video_source = int(args.source) if args.source.isdigit() else args.source
         tracker.process_video(video_source)
     except KeyboardInterrupt:
-        print("\n程序被用户中断")
+        print("\nProgram interrupted by user")
     except Exception as e:
-        print(f"处理视频时出错: {e}")
+        print(f"Error while processing video: {e}")
 
 if __name__ == "__main__":
     main()

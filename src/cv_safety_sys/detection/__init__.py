@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+# File purpose:   init   module.
 """Detection utilities for the CV Safety System."""
 
 from .yolov7_tracker import (

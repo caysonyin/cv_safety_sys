@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
+<!-- File purpose: Project overview, setup, usage, and licensing notes. -->
+
 # CV Safety System
 
 A computer-vision safety monitoring system for exhibition environments, combining **relic detection/tracking, human pose estimation, dangerous-object detection, and real-time alert visualization** in a single video pipeline.
@@ -17,6 +20,7 @@ A computer-vision safety monitoring system for exhibition environments, combinin
 - Python 3.10+
 - Linux / macOS / Windows (with camera access permissions)
 - Internet access for first-time model download
+
 
 ## Installation
 
@@ -94,3 +98,4 @@ See [LICENSE](./LICENSE) for full terms.
 ## Copyright
 
 Copyright (C) 2025 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+

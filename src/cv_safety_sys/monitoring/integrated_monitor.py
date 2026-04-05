@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""文物安全协同监控系统
+# Copyright (C) 2026 Cayson
+# File purpose: Fuse detection and pose signals to generate safety alerts.
+"""Integrated relic safety monitoring system
 
-将文物检测/电子栅栏、人体姿态识别与危险物品检测整合在同一视频流中，
-实现风险人物联动报警与可视化提示。
+Fuses relic detection/fencing, human pose estimation, and dangerous-object detection in one stream.
+Provides linked risk alerts with visual overlays.
 """
 
 from __future__ import annotations
@@ -46,7 +48,7 @@ DANGEROUS_CLASSES = {
 
 
 def point_in_bbox(point: Tuple[int, int], bbox: Sequence[int]) -> bool:
-    """判断像素点是否落在边界框内。"""
+    """Check whether a pixel point falls inside a bounding box."""
 
     x, y = point
     x1, y1, x2, y2 = bbox
@@ -54,7 +56,7 @@ def point_in_bbox(point: Tuple[int, int], bbox: Sequence[int]) -> bool:
 
 
 def bbox_iou(box_a: Sequence[int], box_b: Sequence[int]) -> float:
-    """计算两个边界框的IoU。"""
+    """Compute IoU between two bounding boxes."""
 
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
@@ -84,7 +86,7 @@ class PoseEntry:
 
 
 class PoseLandmarkHelper:
-    """轻量封装的MediaPipe姿态检测器，返回关节点坐标。"""
+    """Lightweight MediaPipe pose wrapper returning keypoint coordinates."""
 
     def __init__(self, model_path: str):
         base_options = mp_python.BaseOptions(model_asset_path=model_path)
@@ -136,7 +138,7 @@ class PoseLandmarkHelper:
 
 
 class IntegratedSafetyMonitor(VideoRelicTracker):
-    """同时处理文物、人员与危险物品的协同安全监控器。"""
+    """Integrated monitor handling relics, persons, and dangerous objects."""
 
     def __init__(
         self,
@@ -151,7 +153,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             model,
             device,
             confidence_threshold=confidence_threshold,
-            window_name="文物安全协同防护系统",
+            window_name="Integrated relic safety monitor",
             create_window=create_window,
         )
 
@@ -177,7 +179,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.active_person_alerts: Dict[int, Dict[str, object]] = {}
 
     # ------------------------------------------------------------------
-    # 数据准备
+    # Data preparation
     # ------------------------------------------------------------------
     def _update_person_detections(self, detections: Iterable[Dict[str, object]]) -> None:
         persons: List[Dict[str, object]] = []
@@ -260,7 +262,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.active_fences = fences
 
     # ------------------------------------------------------------------
-    # 风险分析
+    # Risk analysis
     # ------------------------------------------------------------------
     def _analyse_risks(self) -> List[str]:
         alerts: List[str] = []
@@ -279,18 +281,18 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             points = person.get('pose_points', [])
             bbox = person['bbox']
             person_id = person.get('track_id')
-            label = f"人员 {person_id}" if person_id is not None else "人员"
+            label = f"Person {person_id}" if person_id is not None else "Person"
             if person_id is not None:
-                label = f"人员 ID:{person_id}"
+                label = f"Person ID:{person_id}"
 
-            # 危险物品绑定
+            # Danger object association
             for danger in self.dangerous_detections:
                 danger_bbox = danger['bbox']
                 overlap = bbox_iou(bbox, danger_bbox)
                 keypoint_overlap = any(point_in_bbox(pt, danger_bbox) for pt in points)
 
                 if overlap > 0.05 or keypoint_overlap:
-                    message = f"{label} 携带疑似 {danger['class_name']}"
+                    message = f"{label} appears to carry {danger['class_name']}"
                     person['is_risky'] = True
                     person['risk_messages'].append(message)
                     if person_id is not None:
@@ -302,12 +304,12 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                         )
                     alerts.append(message)
 
-            # 电子栅栏入侵
+            # Safety fence intrusion
             for fence in self.active_fences:
                 if not points:
                     continue
                 if any(point_in_bbox(pt, fence['bbox']) for pt in points):
-                    message = f"{label} 侵入 {fence['label']} 安全栅栏"
+                    message = f"{label} intruded into {fence['label']} safety fence"
                     person['is_risky'] = True
                     person['risk_messages'].append(message)
                     if person_id is not None:
@@ -362,7 +364,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             alerts.append(
                 {
                     'track_id': entry['track_id'],
-                    'label': entry.get('label', f"人员 ID:{entry['track_id']}"),
+                    'label': entry.get('label', f"Person ID:{entry['track_id']}"),
                     'messages': list(entry.get('messages', [])),
                     'severity': entry.get('severity', 'intrusion'),
                 }
@@ -374,7 +376,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         return removed is not None
 
     # ------------------------------------------------------------------
-    # 绘制与展示
+    # Rendering and display
     # ------------------------------------------------------------------
     def _change_stage(self, stage: str) -> None:
         self.workflow_stage = stage
@@ -386,11 +388,11 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             self.total_intrusions = 0
             self.total_dangerous_flags = 0
             self.alert_history.clear()
-            self._show_toast("请选择需要保护的文物，并按 Enter 进入监控", (0, 170, 255))
+            self._show_toast("Select relics to protect, then press Enter to start monitoring", (0, 170, 255))
         elif stage == "monitoring":
             self.monitoring_active = True
             self.session_start_time = time.time()
-            self._show_toast("已进入实时监控模式", (80, 200, 120))
+            self._show_toast("Monitoring mode started", (80, 200, 120))
 
     def _show_toast(
         self,
@@ -505,7 +507,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             if track_id is not None:
                 label_lines.append(f"ID:{track_id}")
             else:
-                label_lines.append("人员")
+                label_lines.append("Person")
             for message in person.get('risk_messages', [])[:2]:
                 label_lines.append(message)
             self._draw_label_block(frame, label_lines, (x1, y1), color=color)
@@ -526,21 +528,21 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             )
 
     # ------------------------------------------------------------------
-    # 主流程
+    # Main flow
     # ------------------------------------------------------------------
     def enter_selection_mode(self) -> None:
-        """切换到文物选择阶段。"""
+        """Switch to relic-selection stage."""
         self._change_stage("selection")
 
     def start_monitoring(self) -> bool:
-        """尝试进入实时监控阶段。"""
+        """Try to enter live monitoring stage."""
         if not self.selected_relics:
-            self._show_toast("请先选择至少一个文物", (0, 0, 255))
+            self._show_toast("Please select at least one relic first", (0, 0, 255))
             return False
         if self.workflow_stage != "monitoring":
             self._change_stage("monitoring")
         else:
-            self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
+            self._show_toast("System is already running in monitoring mode", (120, 200, 255), 1.6)
         return True
 
     def pick_fence_handle(
@@ -549,7 +551,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         y: int,
         tolerance: int = 14,
     ) -> Dict[str, object] | None:
-        """寻找距离鼠标最近的电子栅栏可拖拽点。"""
+        """Find the nearest draggable fence anchor to cursor."""
         return self.find_fence_handle(x, y, tolerance=tolerance)
 
     def adjust_fence_bbox(
@@ -557,18 +559,18 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         track_id: int,
         bbox: Sequence[int],
     ) -> List[int] | None:
-        """根据拖拽结果更新手动电子栅栏。"""
+        """Update manual fence from drag result."""
         return self.update_manual_fence(track_id, bbox)
 
     def get_recent_alerts(self, limit: int = 4) -> List[str]:
-        """返回近期报警信息。"""
+        """Return recent alerts."""
         return [msg for _, msg in list(reversed(self.alert_history))[:limit]]
 
     def process_frame(self, frame: np.ndarray) -> Dict[str, object]:
-        """处理单帧图像并返回渲染结果与状态信息。"""
+        """Process one frame and return rendering + status data."""
 
         if frame is None:
-            raise ValueError("输入帧不能为空")
+            raise ValueError("Input frame must not be empty")
 
         self.frame_count += 1
         self.last_frame_shape = frame.shape
@@ -598,9 +600,9 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             timestamp = time.time()
             for alert in alerts:
                 self.alert_history.append((timestamp, alert))
-                if "侵入" in alert:
+                if "intrusion" in alert:
                     self.total_intrusions += 1
-                if "携带" in alert:
+                if "carrying" in alert:
                     self.total_dangerous_flags += 1
 
         status = {
@@ -647,17 +649,17 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         cap = cv2.VideoCapture(video_source)
 
         if not cap.isOpened():
-            print(f"无法打开视频源: {video_source}")
+            print(f"Failed to open video source: {video_source}")
             return
 
         frame_count = 0
 
-        print("=== 文物安全协同防护系统 ===")
-        print("操作提示: 点击选中文物，Enter确认，ESC退出，S保存当前帧")
+        print("=== Integrated relic safety monitor ===")
+        print("Controls: click relics to select, Enter to confirm, ESC to quit, S to save frame")
         if self.workflow_stage != "selection":
             self._change_stage("selection")
         else:
-            self._show_toast("请选择需要保护的文物，并按 Enter 进入监控", (0, 170, 255))
+            self._show_toast("Select relics to protect, then press Enter to start monitoring", (0, 170, 255))
 
         try:
             while True:
@@ -692,9 +694,9 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                     timestamp = time.time()
                     for alert in alerts:
                         self.alert_history.append((timestamp, alert))
-                        if "侵入" in alert:
+                        if "intrusion" in alert:
                             self.total_intrusions += 1
-                        if "携带" in alert:
+                        if "carrying" in alert:
                             self.total_dangerous_flags += 1
 
                 cv2.imshow(self.window_name, canvas)
@@ -705,21 +707,21 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
                 if key == 13:
                     if self.workflow_stage == "selection":
                         if not self.selected_relics:
-                            self._show_toast("请先选择至少一个文物", (0, 0, 255))
+                            self._show_toast("Please select at least one relic first", (0, 0, 255))
                         else:
-                            print(f"确认选择 {len(self.selected_relics)} 个文物")
+                            print(f"Confirmed selection of {len(self.selected_relics)} relic(s)")
                             self._change_stage("monitoring")
                     else:
-                        self._show_toast("系统已在监控模式运行", (120, 200, 255), 1.6)
+                        self._show_toast("System is already running in monitoring mode", (120, 200, 255), 1.6)
                 if key in (ord('s'), ord('S')):
                     filename = f"integrated_frame_{frame_count}.jpg"
                     cv2.imwrite(filename, canvas)
-                    print(f"保存帧到: {filename}")
-                    self._show_toast(f"已保存 {filename}", (0, 170, 255), 1.6)
+                    print(f"Saved frame to: {filename}")
+                    self._show_toast(f"Saved {filename}", (0, 170, 255), 1.6)
                 if key in (ord('r'), ord('R')):
                     if self.workflow_stage != "selection":
                         self._change_stage("selection")
-                        print("返回文物选择阶段")
+                        print("Back to relic-selection stage")
 
         finally:
             cap.release()
@@ -728,27 +730,27 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="文物安全协同防护系统")
-    parser.add_argument('--source', type=str, default='0', help='视频源(0=摄像头或视频文件路径)')
-    parser.add_argument('--conf', type=float, default=0.25, help='YOLO置信度阈值')
-    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='姿态模型路径')
-    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO 模型路径')
+    parser = argparse.ArgumentParser(description="Integrated relic safety monitor")
+    parser.add_argument('--source', type=str, default='0', help='Video source (0 for webcam or video file path)')
+    parser.add_argument('--conf', type=float, default=0.25, help='YOLOConfidence threshold')
+    parser.add_argument('--pose-model', type=str, default=str(DEFAULT_POSE_MODEL_PATH), help='Pose model path')
+    parser.add_argument('--yolo-model', type=str, default=str(DEFAULT_YOLO_MODEL_PATH), help='YOLO model path')
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
 
-    # 准备姿态模型
+    # Prepare pose model
     pose_model_path = Path(args.pose_model)
     if not pose_model_path.exists():
         downloaded = download_pose_model(pose_model_path)
         if downloaded is None:
-            print("无法准备姿态模型，请检查网络连接或手动将模型放到 models/ 目录")
+            print("Failed to prepare pose model. Check network or place model in models/.")
             return
         pose_model_path = Path(downloaded)
 
-    # 准备YOLO模型
+    # Prepare YOLO model
     model_path = download_yolov7_tiny(Path(args.yolo_model))
     if model_path is None:
         return
@@ -769,7 +771,7 @@ def main() -> None:
     try:
         monitor.run(video_source)
     except KeyboardInterrupt:
-        print("\n程序已中断")
+        print("\nProgram interrupted")
 
 
 if __name__ == '__main__':

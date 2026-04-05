@@ -1,72 +1,99 @@
+<!-- Copyright (C) 2026 Cayson -->
+<!-- File purpose: Project overview, setup, usage, and licensing notes. -->
+
 # CV Safety System
 
-面向展区安全的计算机视觉一体化方案，提供 **姿态感知示例（`examples/pose/`）** 与 **安全监控主干（`src/cv_safety_sys/`）** 两个可独立运行的子系统。当前默认场景将 `cup` 视为受保护文物，`tennis racket` 视为危险物品，所有 UI 标签与告警策略均为该配置调优。
+A computer-vision safety monitoring system for exhibition environments, combining **relic detection/tracking, human pose estimation, dangerous-object detection, and real-time alert visualization** in a single video pipeline.
 
-## 技术栈
+> The current default configuration treats `cup` as the protected relic class and `knife`, `scissors`, and `baseball bat` as dangerous classes (configurable in code).
 
-- **语言与运行环境**：Python 3.10，Ubuntu 22.04 + CPU 基线，可扩展到 GPU。
-- **计算机视觉**：
-  - `YOLOv7-tiny`（PyTorch）：检测 `cup/person/tennis racket` 并输出置信度。
-  - `MediaPipe Tasks Pose`：33 关键点姿态推理，含模型自动下载器。
-  - `OpenCV`：摄像头采集、图像预处理与可视化。
-- **跟踪与策略**：
-  - 自研 `SimpleTracker`（质心 + IoU 混合策略）和 `CupFence`/`HazardBinder` 安全逻辑。
-  - `NumPy`/`SciPy`（可选）用于距离计算与向量化操作。
-- **桌面客户端**：`PySide6` 绘制实时叠层、表单和告警列表；Qt 事件与检测器共享统一接口。
-- **工程工具**：`requirements.txt` 管理依赖，`run.py` 统一调度、下载模型并暴露命令行参数。
+## Features
 
-## 功能亮点
+- YOLOv7-tiny detection with lightweight multi-object tracking and relic selection logic
+- MediaPipe Pose 33-keypoint estimation
+- Relic fence intrusion detection plus dangerous-object/person association alerts
+- PySide6 desktop UI with alert list, status panel, and video overlays
+- Automatic first-run download for pose model and YOLO weights
 
-- YOLOv7-tiny + 质心跟踪，支持鼠标交互式选择受保护展品。
-- 根据选定展品自动生成安全围栏，并结合 MediaPipe 姿态判断人体侵入情况。
-- 危险物绑定逻辑可将 `tennis racket` 关联到最近人员并触发告警。
-- 轻量依赖，单机 CPU 可实时运行；可在 CLI 或 PySide6 UI 中任意组合。
+## Requirements
 
-## 快速上手
+- Python 3.10+
+- Linux / macOS / Windows (with camera access permissions)
+- Internet access for first-time model download
+
+## Installation
 
 ```bash
-# 安装依赖
+# 1) Install dependencies
 pip install -r requirements.txt
 
-# （首次）拉取 YOLOv7 推理所需的官方代码
+# 2) Clone YOLOv7 repository
+# The current implementation dynamically imports inference utilities from this local folder.
 git clone --depth 1 https://github.com/WongKinYiu/yolov7.git
-
-# 启动完整桌面端，自动下载缺失模型到 ./models
-python run.py --source 0
-
-# 以 CLI 方式运行安全联动（展品 + 危险物）
-python object_protection/integrated_safety_monitor.py --source 0
-
-# 启动 Qt 客户端并指定自定义告警音
-python object_protection/qt_monitor_app.py --source 0 --alert-sound path/to/sound.wav
 ```
 
-`run.py` 会在首次启动时自动下载 MediaPipe 姿态模型与 YOLOv7-tiny 权重到 `models/`。若需要自定义权重，可直接放入该目录并通过 `--yolo-model` 或 `--pose-model` 覆盖路径。
-
-## 中文字体渲染
-
-视频叠层使用支持 Unicode 的文字渲染器，会自动搜索常用中文字体（STHeiti、Microsoft YaHei、WenQuanYi、Noto Sans CJK 等）。如字体安装在其他路径，可在运行前设置：
+## Quick Start
 
 ```bash
-export CV_SAFETY_FONT=/absolute/path/to/font.ttf
+# Recommended: launch the integrated PySide6 client
 python run.py --source 0
 ```
 
-同样适用于 `object_protection/qt_monitor_app.py`。
+Optional arguments:
 
-## 目录结构
+- `--source`: camera index (for example, `0`) or video file path
+- `--conf`: YOLO confidence threshold (default: `0.25`)
+- `--pose-model`: pose model path (default: `models/pose_landmarker_full.task`)
+- `--yolo-model`: YOLO weights path (default: `models/yolov7-tiny.pt`)
+- `--alert-sound`: custom alert sound file path
 
+## Alternative Entry Points
+
+```bash
+# Integrated monitoring logic with OpenCV window
+PYTHONPATH=src python -m cv_safety_sys.monitoring.integrated_monitor --source 0
+
+# Directly launch the Qt module
+PYTHONPATH=src python -m cv_safety_sys.ui.qt_monitor --source 0
+
+# Detector/tracker only (debug)
+PYTHONPATH=src python -m cv_safety_sys.detection.yolov7_tracker --source 0
 ```
+
+## Repository Structure
+
+```text
 cv_safety_sys/
-├── models/                    # 姿态/检测模型缓存（首次运行自动创建）
-├── run.py                     # PySide6 客户端统一入口
-├── src/cv_safety_sys/         # 可复用的核心 Python 包
-│   ├── detection/             # YOLOv7 检测与跟踪模块
-│   ├── monitoring/            # 安全集成逻辑
-│   ├── pose/                  # MediaPipe 封装与模型下载器
-│   └── ui/                    # PySide6 应用与渲染
-├── examples/pose/             # 姿态推理示例脚本
-└── docs/                      # 技术文档（架构 / 姿态 / 展品保护）
+├── run.py
+├── requirements.txt
+├── src/cv_safety_sys/
+│   ├── detection/           # YOLOv7 detection and tracking
+│   ├── monitoring/          # Relic + pose + dangerous-object safety logic
+│   ├── pose/                # MediaPipe pose model download helper
+│   ├── ui/                  # PySide6 client
+│   └── utils/               # Utilities (for example, text rendering)
+└── docs/                    # Architecture and module documentation
 ```
 
-详细技术说明请查阅 `docs/system_architecture.md`、`docs/webcam_pose_detection.md` 与 `docs/object_protection.md`。
+## Documentation
+
+- System architecture: `docs/system_architecture.md`
+- Relic protection workflow: `docs/object_protection.md`
+- Pose module guide: `docs/webcam_pose_detection.md`
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
+You may copy, modify, and redistribute this project under the terms of GPL-3.0.
+See the [LICENSE](./LICENSE) file for details.
+
+## Open Source Notice
+
+This project is released under GPL-3.0.
+You may use, modify, and redistribute it under GPL-3.0 conditions.
+If you distribute modified versions, you are generally required to provide corresponding source code under GPL-compatible terms.
+See [LICENSE](./LICENSE) for full terms.
+
+## Copyright
+
+Copyright (C) 2026 Cayson

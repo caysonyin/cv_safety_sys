@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Cayson
+# File purpose:   init   module.
 """Detection utilities for the CV Safety System."""
 
 from .yolov7_tracker import (

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""下载 MediaPipe Pose Landmarker 模型到项目 ``models`` 目录。"""
+# Copyright (C) 2026 Cayson
+# File purpose: Download and cache the MediaPipe pose model into the local models directory.
+"""Download the MediaPipe Pose Landmarker model into the project's ``models`` directory."""
 
 from __future__ import annotations
 
@@ -15,27 +17,27 @@ DEFAULT_MODEL_PATH = REPO_ROOT / "models" / "pose_landmarker_full.task"
 
 
 def download_model(destination: Optional[Path] = None) -> Optional[str]:
-    """确保姿态识别模型存在并返回其路径。"""
+    """Ensure the pose model exists and return the local path."""
 
     destination = destination or DEFAULT_MODEL_PATH
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     if destination.exists():
-        print(f"模型文件已存在: {destination}")
+        print(f"Model already exists: {destination}")
         return str(destination)
 
     try:
-        print("正在下载模型文件，请稍候...")
+        print("Downloading pose model, please wait...")
         urllib.request.urlretrieve(MODEL_URL, destination)
-        print(f"模型下载完成: {destination}")
+        print(f"Model download completed: {destination}")
         return str(destination)
     except Exception as e:
-        print(f"下载失败: {e}")
+        print(f"Download failed: {e}")
         return None
 
 if __name__ == "__main__":
     model_path = download_model()
     if model_path:
-        print("模型准备就绪，可以运行姿态检测程序了！")
+        print("Model is ready. You can now run pose detection.")
     else:
-        print("模型下载失败，请检查网络连接")
+        print("Model download failed. Please check your network connection.")

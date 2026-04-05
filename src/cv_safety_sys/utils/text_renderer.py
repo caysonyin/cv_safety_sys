@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Copyright (C) 2026 Cayson
+# File purpose: Render Unicode text overlays on OpenCV frames.
 """Unicode-aware text rendering helpers for OpenCV frames."""
 
 from __future__ import annotations

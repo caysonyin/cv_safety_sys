@@ -1,44 +1,41 @@
-# 系统总体架构
+# System Architecture
 
-该项目面向“受保护展品 + 人体姿态 + 危险物品”联动防护场景，所有子模块围绕统一的摄像头输入与模型缓存目录协同工作。整体架构由 **输入采集层 → 感知推理层 → 安全策略层 → 展示与告警层** 四个部分组成。
+This project performs real-time safety monitoring by combining **protected relics, human pose landmarks, and dangerous objects**.
 
-## 模块划分
+The main runtime pipeline is:
 
-| 模块 | 关键文件 | 核心职责 |
+**Video Input → Detection/Tracking → Pose Estimation → Safety Fusion Logic → UI/Alerts**
+
+## Modules and Responsibilities
+
+| Module | Key File | Responsibility |
 | --- | --- | --- |
-| 摄像头采集层 | `examples/pose/*.py`、`run.py` | 拉取本地或 RTSP 视频流，统一输出 `BGR` 帧。 |
-| 姿态感知层 | `cv_safety_sys/pose/*` | 封装 MediaPipe 33 关节点推理、模型下载与坐标变换。 |
-| 目标检测与跟踪层 | `cv_safety_sys/detection/yolov7_tracker.py` | 载入 YOLOv7-tiny、执行类别筛选与质心跟踪。 |
-| 安全策略层 | `cv_safety_sys/monitoring/integrated_monitor.py` | 结合姿态与目标结果，计算安全围栏、危险关联和告警等级。 |
-| 展示与交互层 | `cv_safety_sys/ui/qt_monitor.py`、`object_protection/qt_monitor_app.py` | PySide6 桌面 UI、鼠标选取、防护区可视化与历史记录。 |
+| Startup and resource checks | `run.py` | Validates local `yolov7/` repository, prepares model paths, and launches the Qt client. |
+| Detection and tracking | `src/cv_safety_sys/detection/yolov7_tracker.py` | Runs YOLOv7-tiny detection, class filtering, `SimpleTracker`, and relic selection interaction. |
+| Pose model management | `src/cv_safety_sys/pose/model_downloader.py` | Downloads and caches the MediaPipe Pose Landmarker model. |
+| Safety fusion logic | `src/cv_safety_sys/monitoring/integrated_monitor.py` | Fuses person/relic/dangerous-object detections with pose points and produces fences, alerts, and stats. |
+| Visualization and interaction | `src/cv_safety_sys/ui/qt_monitor.py` | Implements PySide6 UI, video panel, alert list, status widgets, and mouse/keyboard interactions. |
 
-所有模型文件默认存放在仓库根目录的 `models/` 下，通过 `run.py` 或各子模块的 `download_*` 方法自动拉取，避免重复配置。
+## Data Flow
 
-## 数据流与关键接口
+1. **Video capture**: OpenCV reads frames from a camera or a video file.
+2. **Detection and class filtering**: YOLOv7 outputs bounding boxes and classes, including `cup`, `person`, and configured dangerous classes.
+3. **Tracking**: `SimpleTracker` maintains stable `track_id`s across frames.
+4. **Pose estimation**: MediaPipe Pose produces 33 keypoints and associates pose entries to person detections via IoU.
+5. **Safety logic**:
+   - Build protection fences around selected relics.
+   - Detect whether human keypoints enter the fenced region.
+   - Associate dangerous objects to nearby persons and escalate alert severity.
+6. **Output rendering**: Push structured status/alerts to OpenCV/Qt views and update alert history and counters.
 
-1. **帧采集**：`VideoSource`（PySide6 UI）或 OpenCV Webcam 拉取原始帧，并带上时间戳、分辨率。
-2. **目标检测 → 追踪**：
-   - `YOLOv7TinyDetector` 返回 `BBox(xyxy) + class_id + score`。
-   - `SimpleTracker` 维护 `track_id → bbox`，并记录“受保护展品”的自定义属性。
-3. **姿态推理 → 坐标映射**：
-   - `PoseLandmarker` 输出 33 个归一化坐标。
-   - `cv_safety_sys.pose.postprocess.scale_landmarks` 将归一化点映射回与检测框同一坐标系。
-4. **安全策略聚合**：
-   - `CupFence` 根据被标记的展品生成扩展矩形。
-   - `HazardBinder` 计算危险物体与最近人体骨架之间的欧氏距离，决定告警级别。
-5. **UI 呈现**：`QtMonitorWidget` 将跟踪数据、姿态关节点、围栏与告警文本绘制到显示层，并暴露鼠标事件给 `SimpleTracker`。
+## Runtime Entry Points
 
-以上流程通过 `IntegratedSafetyMonitor` 这个 orchestrator 串联，任何脚本只要实例化它就能获得相同的业务逻辑。
+- `python run.py --source 0`: recommended integrated desktop client.
+- `PYTHONPATH=src python -m cv_safety_sys.monitoring.integrated_monitor --source 0`: OpenCV monitoring view.
+- `PYTHONPATH=src python -m cv_safety_sys.ui.qt_monitor --source 0`: direct Qt module entry.
 
-## 线程与性能策略
+## Models and Dependencies
 
-- **推理并行**：在高性能脚本中，会使用 `ThreadPoolExecutor` 将姿态与 YOLO 推理拆分，最后在主线程聚合结果。
-- **缓冲队列**：摄像头采集与推理解耦，超时后自动丢弃最旧帧，保持整体延迟稳定。
-- **降采样与 ROI**：默认对输入帧执行短边 640 像素的缩放，再映射回原尺寸，兼顾速度与精度。
-
-## 与文档的对应关系
-
-- `docs/webcam_pose_detection.md`：详细说明姿态模块的脚本、关键参数与排障。
-- `docs/object_protection.md`：聚焦展品保护、危险物识别与 Qt 客户端的协同流程。
-
-阅读本章可以快速定位需要修改的模块，并理解跨模块接口如何协同。
+- Default YOLO weights path: `models/yolov7-tiny.pt`
+- Default pose model path: `models/pose_landmarker_full.task`
+- YOLO inference code folder: repository root `yolov7/` (must be cloned manually)

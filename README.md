@@ -70,3 +70,7 @@ cv_safety_sys/
 ```
 
 详细技术说明请查阅 `docs/system_architecture.md`、`docs/webcam_pose_detection.md`、`docs/object_protection.md` 与 `docs/huawei_cloud_iot_access.md`。
+
+## 开源协议
+
+本项目采用 [MIT License](LICENSE) 开源协议。

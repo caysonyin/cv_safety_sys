@@ -1,6 +1,6 @@
 # 系统总体架构
 
-该项目面向“受保护展品 + 人体姿态 + 危险物品”联动防护场景，所有子模块围绕统一的摄像头输入与模型缓存目录协同工作。整体架构由 **输入采集层 → 感知推理层 → 安全策略层 → 展示与告警层** 四个部分组成。
+该项目面向“受保护展品 + 人体姿态 + 危险物品”联动防护场景，所有子模块围绕统一的摄像头输入与模型缓存目录协同工作。整体架构由 **输入采集层 → 感知推理层 → 安全策略层 → 展示与告警层 → 云端上报层（可选）** 五个部分组成。
 
 ## 模块划分
 
@@ -11,6 +11,7 @@
 | 目标检测与跟踪层 | `cv_safety_sys/detection/yolov7_tracker.py` | 载入 YOLOv7-tiny、执行类别筛选与质心跟踪。 |
 | 安全策略层 | `cv_safety_sys/monitoring/integrated_monitor.py` | 结合姿态与目标结果，计算安全围栏、危险关联和告警等级。 |
 | 展示与交互层 | `cv_safety_sys/ui/qt_monitor.py`、`object_protection/qt_monitor_app.py` | PySide6 桌面 UI、鼠标选取、防护区可视化与历史记录。 |
+| 云端上报层（可选） | `cv_safety_sys/cloud/reporter.py` | 定义统一上报接口，预留华为云 IoTDA MQTT 对接点。 |
 
 所有模型文件默认存放在仓库根目录的 `models/` 下，通过 `run.py` 或各子模块的 `download_*` 方法自动拉取，避免重复配置。
 
@@ -27,6 +28,7 @@
    - `CupFence` 根据被标记的展品生成扩展矩形。
    - `HazardBinder` 计算危险物体与最近人体骨架之间的欧氏距离，决定告警级别。
 5. **UI 呈现**：`QtMonitorWidget` 将跟踪数据、姿态关节点、围栏与告警文本绘制到显示层，并暴露鼠标事件给 `SimpleTracker`。
+6. **云端扩展（可选）**：`IntegratedSafetyMonitor` 通过 `AlertReporter` 输出结构化 payload，可接入 MQTT/HTTP 等外部系统。
 
 以上流程通过 `IntegratedSafetyMonitor` 这个 orchestrator 串联，任何脚本只要实例化它就能获得相同的业务逻辑。
 

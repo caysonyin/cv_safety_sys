@@ -36,6 +36,12 @@ from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
 )
+from cv_safety_sys.cloud import (
+    CloudDataPublisher,
+    NoOpCloudPublisher,
+    build_alert_payload,
+    build_snapshot_payload,
+)
 from cv_safety_sys.utils import put_text
 
 
@@ -148,6 +154,8 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         pose_model_path: str,
         confidence_threshold: float = 0.1,
         create_window: bool = True,
+        cloud_publisher: CloudDataPublisher | None = None,
+        device_id: str = "local-device",
     ):
         super().__init__(
             model,
@@ -177,6 +185,8 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
         self.frame_count = 0
         self.last_frame_shape: Tuple[int, int, int] | None = None
         self.active_person_alerts: Dict[int, Dict[str, object]] = {}
+        self.cloud_publisher = cloud_publisher or NoOpCloudPublisher()
+        self.device_id = device_id
 
     # ------------------------------------------------------------------
     # Data preparation
@@ -637,6 +647,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             if self.toast_message
             else None,
         }
+        self._publish_cloud_data(status=status, alerts=alerts)
 
         return {
             'frame': canvas,
@@ -644,6 +655,34 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
             'alerts': alerts,
             'status': status,
         }
+
+    def close(self) -> None:
+        """Release runtime resources used by this monitor instance."""
+        self.pose_helper.close()
+        self.cloud_publisher.close()
+
+    def _publish_cloud_data(
+        self,
+        *,
+        status: Dict[str, object],
+        alerts: Sequence[str],
+    ) -> None:
+        """Push monitoring snapshot + alerts to pluggable cloud transport."""
+        snapshot_payload = build_snapshot_payload(
+            device_id=self.device_id,
+            status=status,
+        )
+        self.cloud_publisher.publish_monitoring_snapshot(snapshot_payload)
+
+        for alert_message in alerts:
+            severity = "danger" if "carry" in alert_message else "intrusion"
+            alert_payload = build_alert_payload(
+                device_id=self.device_id,
+                alert_message=alert_message,
+                severity=severity,
+                status=status,
+            )
+            self.cloud_publisher.publish_alert_event(alert_payload)
 
     def run(self, video_source: int | str = 0) -> None:
         cap = cv2.VideoCapture(video_source)
@@ -725,7 +764,7 @@ class IntegratedSafetyMonitor(VideoRelicTracker):
 
         finally:
             cap.release()
-            self.pose_helper.close()
+            self.close()
             cv2.destroyAllWindows()
 
 

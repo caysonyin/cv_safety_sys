@@ -637,7 +637,7 @@ class SafetyMonitorWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.worker.stop()
         with self.worker.monitor_lock:
-            self.monitor.pose_helper.close()
+            self.monitor.close()
         super().closeEvent(event)
 
 

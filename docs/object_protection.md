@@ -5,7 +5,6 @@
 
 This document explains the relic-protection workflow that combines relic detection, person pose landmarks, and dangerous-object association. The central orchestrator is `IntegratedSafetyMonitor`.
 
-## Core Modules
 
 ```text
 src/cv_safety_sys/
@@ -31,6 +30,7 @@ src/cv_safety_sys/
 > To extend dangerous categories, update `DANGEROUS_CLASSES` in `integrated_monitor.py`.
 
 ## Common Commands
+
 
 ```bash
 # Recommended integrated runtime

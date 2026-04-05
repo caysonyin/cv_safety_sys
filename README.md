@@ -21,6 +21,7 @@ A computer-vision safety monitoring system for exhibition environments, combinin
 - Linux / macOS / Windows (with camera access permissions)
 - Internet access for first-time model download
 
+
 ## Installation
 
 ```bash
@@ -96,4 +97,5 @@ See [LICENSE](./LICENSE) for full terms.
 
 ## Copyright
 
-Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+Copyright (C) 2025 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
+

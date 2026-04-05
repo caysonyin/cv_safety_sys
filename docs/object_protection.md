@@ -1,48 +1,47 @@
-# 文物保护与安全联动
+# Relic Protection and Safety Fusion
 
-本文聚焦项目中的“文物防护 + 人员姿态 + 危险物品”联动逻辑，核心由 `IntegratedSafetyMonitor` 统一编排。
+This document explains the relic-protection workflow that combines relic detection, person pose landmarks, and dangerous-object association. The central orchestrator is `IntegratedSafetyMonitor`.
 
-## 关键模块
+## Core Modules
 
 ```text
 src/cv_safety_sys/
-├── detection/yolov7_tracker.py      # 检测、跟踪、文物选择
-├── monitoring/integrated_monitor.py # 联动策略与报警决策
-└── ui/qt_monitor.py                 # Qt 界面与交互
+├── detection/yolov7_tracker.py      # Detection, tracking, relic selection
+├── monitoring/integrated_monitor.py # Fusion logic and alert decisions
+└── ui/qt_monitor.py                 # Qt interface and interactions
 ```
 
-## 联动流程
+## End-to-End Workflow
 
-1. **检测阶段**：YOLOv7-tiny 检测文物、人员和危险物体。
-2. **跟踪阶段**：为检测结果分配 `track_id`，维持跨帧一致性。
-3. **文物保护区**：对被标记为保护对象的文物框扩展出“电子围栏”。
-4. **姿态关联**：将人体 33 个关键点与人员框关联，判断是否侵入围栏。
-5. **危险关联**：将危险物体绑定到最近人员，并提升报警等级。
-6. **告警输出**：生成结构化报警消息，供 UI 列表与视频叠层展示。
+1. **Detection stage**: YOLOv7-tiny detects relics, persons, and dangerous objects.
+2. **Tracking stage**: detections are assigned stable `track_id`s for temporal consistency.
+3. **Relic fence stage**: selected relic boxes are expanded into protection fences.
+4. **Pose association stage**: 33 pose keypoints are matched to person detections and checked against fences.
+5. **Danger association stage**: dangerous objects are linked to nearby persons and may trigger higher severity alerts.
+6. **Alert output stage**: structured alert objects are emitted for UI list rendering and frame overlays.
 
-## 默认类别
+## Default Categories
 
-- 受保护文物：`cup`
-- 危险物品：`knife`、`scissors`、`baseball bat`
+- Protected relic class: `cup`
+- Dangerous classes: `knife`, `scissors`, `baseball bat`
 
-> 若需要扩展危险类别，可在 `integrated_monitor.py` 的 `DANGEROUS_CLASSES` 中增改。
+> To extend dangerous categories, update `DANGEROUS_CLASSES` in `integrated_monitor.py`.
 
-## 常用命令
+## Common Commands
 
 ```bash
-# 一键运行（推荐）
+# Recommended integrated runtime
 python run.py --source 0
 
-# 调试联动策略（OpenCV窗口）
+# Debug fused monitoring logic (OpenCV window)
 PYTHONPATH=src python -m cv_safety_sys.monitoring.integrated_monitor --source 0 --conf 0.25
 
-# 仅调试检测与跟踪
+# Detection/tracking only
 PYTHONPATH=src python -m cv_safety_sys.detection.yolov7_tracker --source 0 --conf 0.1
 ```
 
-## 交互说明（Qt）
+## Qt Interaction Notes
 
-- 在视频区点击目标可触发文物选择流程（具体提示以界面状态栏/Toast 为准）。
-- 报警面板会展示当前事件摘要，点击列表项可定位对应目标。
-- 可通过 `--alert-sound` 指定本地音频文件作为报警音。
-
+- Clicking targets in the video area enters relic-selection workflow (see in-app status/toast messages).
+- The alert panel lists current events; selecting an item highlights the corresponding target context.
+- Use `--alert-sound` to provide a custom local sound file for alerts.

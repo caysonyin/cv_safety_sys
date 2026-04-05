@@ -1,40 +1,41 @@
-# 系统总体架构
+# System Architecture
 
-本项目围绕“受保护文物 + 人体姿态 + 危险物品”三类信息做实时联动监控。运行主链路可以概括为：
+This project performs real-time safety monitoring by combining **protected relics, human pose landmarks, and dangerous objects**.
 
-**视频输入 → 目标检测/跟踪 → 姿态识别 → 安全策略融合 → UI/告警输出**。
+The main runtime pipeline is:
 
-## 模块与职责
+**Video Input → Detection/Tracking → Pose Estimation → Safety Fusion Logic → UI/Alerts**
 
-| 模块 | 关键文件 | 职责 |
+## Modules and Responsibilities
+
+| Module | Key File | Responsibility |
 | --- | --- | --- |
-| 启动与资源校验 | `run.py` | 校验 `yolov7/` 仓库、准备模型路径并启动 Qt 客户端。 |
-| 检测与跟踪 | `src/cv_safety_sys/detection/yolov7_tracker.py` | YOLOv7-tiny 检测、目标筛选、`SimpleTracker` 跟踪与文物选择交互。 |
-| 姿态模型管理 | `src/cv_safety_sys/pose/model_downloader.py` | 下载并缓存 MediaPipe Pose Landmarker 模型。 |
-| 安全策略融合 | `src/cv_safety_sys/monitoring/integrated_monitor.py` | 融合人/文物/危险物与姿态点，输出围栏、报警和统计信息。 |
-| 可视化与交互 | `src/cv_safety_sys/ui/qt_monitor.py` | PySide6 客户端、视频显示、报警列表、状态面板、鼠标/键盘交互。 |
+| Startup and resource checks | `run.py` | Validates local `yolov7/` repository, prepares model paths, and launches the Qt client. |
+| Detection and tracking | `src/cv_safety_sys/detection/yolov7_tracker.py` | Runs YOLOv7-tiny detection, class filtering, `SimpleTracker`, and relic selection interaction. |
+| Pose model management | `src/cv_safety_sys/pose/model_downloader.py` | Downloads and caches the MediaPipe Pose Landmarker model. |
+| Safety fusion logic | `src/cv_safety_sys/monitoring/integrated_monitor.py` | Fuses person/relic/dangerous-object detections with pose points and produces fences, alerts, and stats. |
+| Visualization and interaction | `src/cv_safety_sys/ui/qt_monitor.py` | Implements PySide6 UI, video panel, alert list, status widgets, and mouse/keyboard interactions. |
 
-## 数据流
+## Data Flow
 
-1. **视频采集**：OpenCV 从摄像头或文件读取帧。
-2. **检测与分类**：YOLOv7 输出边界框与类别，筛出 `cup/person` 及危险类别。
-3. **目标跟踪**：`SimpleTracker` 为目标分配稳定 `track_id`，用于跨帧关联。
-4. **姿态推理**：MediaPipe Pose 输出人体关键点，并与 person 检测框做 IoU 关联。
-5. **策略计算**：
-   - 对选中文物生成防护围栏。
-   - 判断人体关键点是否侵入围栏。
-   - 对危险物与最近人员进行关联并触发更高等级告警。
-6. **结果输出**：将结构化状态同步到 OpenCV/Qt 显示层，并更新报警列表与统计数据。
+1. **Video capture**: OpenCV reads frames from a camera or a video file.
+2. **Detection and class filtering**: YOLOv7 outputs bounding boxes and classes, including `cup`, `person`, and configured dangerous classes.
+3. **Tracking**: `SimpleTracker` maintains stable `track_id`s across frames.
+4. **Pose estimation**: MediaPipe Pose produces 33 keypoints and associates pose entries to person detections via IoU.
+5. **Safety logic**:
+   - Build protection fences around selected relics.
+   - Detect whether human keypoints enter the fenced region.
+   - Associate dangerous objects to nearby persons and escalate alert severity.
+6. **Output rendering**: Push structured status/alerts to OpenCV/Qt views and update alert history and counters.
 
-## 运行入口
+## Runtime Entry Points
 
-- `python run.py --source 0`：推荐，一键启动桌面端。
-- `PYTHONPATH=src python -m cv_safety_sys.monitoring.integrated_monitor --source 0`：OpenCV 窗口版本。
-- `PYTHONPATH=src python -m cv_safety_sys.ui.qt_monitor --source 0`：直接运行 Qt 模块。
+- `python run.py --source 0`: recommended integrated desktop client.
+- `PYTHONPATH=src python -m cv_safety_sys.monitoring.integrated_monitor --source 0`: OpenCV monitoring view.
+- `PYTHONPATH=src python -m cv_safety_sys.ui.qt_monitor --source 0`: direct Qt module entry.
 
-## 模型与依赖
+## Models and Dependencies
 
-- YOLO 权重默认路径：`models/yolov7-tiny.pt`
-- 姿态模型默认路径：`models/pose_landmarker_full.task`
-- YOLO 推理代码目录：仓库根目录下 `yolov7/`（需手动 `git clone`）
-
+- Default YOLO weights path: `models/yolov7-tiny.pt`
+- Default pose model path: `models/pose_landmarker_full.task`
+- YOLO inference code folder: repository root `yolov7/` (must be cloned manually)

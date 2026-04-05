@@ -1,4 +1,4 @@
-<!-- Copyright (C) 2026 Cayson -->
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
 <!-- File purpose: Project overview, setup, usage, and licensing notes. -->
 
 # CV Safety System
@@ -96,4 +96,4 @@ See [LICENSE](./LICENSE) for full terms.
 
 ## Copyright
 
-Copyright (C) 2026 Cayson
+Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen

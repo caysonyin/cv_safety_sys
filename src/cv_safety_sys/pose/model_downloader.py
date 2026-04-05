@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2026 Cayson
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
 # File purpose: Download and cache the MediaPipe pose model into the local models directory.
 """Download the MediaPipe Pose Landmarker model into the project's ``models`` directory."""
 

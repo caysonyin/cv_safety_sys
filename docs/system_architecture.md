@@ -1,4 +1,4 @@
-<!-- Copyright (C) 2026 Cayson -->
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
 <!-- File purpose: High-level architecture, module boundaries, and data flow. -->
 
 # System Architecture

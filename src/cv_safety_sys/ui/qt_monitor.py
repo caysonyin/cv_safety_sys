@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2026 Cayson
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
 # File purpose: PySide6 desktop client for live monitoring and alert interaction.
 """PySide6 local visualization client for the integrated relic safety monitor."""
 

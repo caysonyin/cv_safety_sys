@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2026 Cayson
+# Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen
 # File purpose: YOLOv7 detection, relic tracking, and interactive fence selection.
 """YOLOv7-tiny based relic detection and tracking toolkit."""
 

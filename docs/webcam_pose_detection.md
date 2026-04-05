@@ -1,4 +1,4 @@
-<!-- Copyright (C) 2026 Cayson -->
+<!-- Copyright (C) 2026 Linsheng Yin, Heng Quan, Bojin Li, Yunpeng Din, Penghan Chen -->
 <!-- File purpose: Pose module usage, model handling, and runtime guidance. -->
 
 # Pose Detection Module Guide

@@ -132,7 +132,7 @@ class HuaweiCloudSettingsDialog(QDialog):
             port = int(port_text)
         except ValueError:
             raise ValueError(
-                f"Port must be a valid integer (got '{port_text}')."
+                f"Port must be a valid integer between 1 and 65535 (got '{port_text}')."
             )
         return HuaweiMQTTConfig(
             host=self.host_edit.text().strip(),
@@ -720,26 +720,18 @@ class SafetyMonitorWindow(QMainWindow):
 
         device_id = dialog.get_device_id()
 
-        # Close previous publisher if any
+        # Close previous publisher if any; log unexpected errors but don't abort
         with self.worker.monitor_lock:
             old_publisher = self.monitor.cloud_publisher
         try:
             old_publisher.close()
-        except Exception:  # pragma: no cover
+        except OSError:  # pragma: no cover - network teardown may raise OSError
             pass
 
         try:
             publisher = HuaweiMQTTPublisher(config)
-        except RuntimeError as exc:
+        except Exception as exc:
             QMessageBox.critical(self, "Connection Failed", str(exc))
-            with self.worker.monitor_lock:
-                self.monitor.cloud_publisher = NoOpCloudPublisher()
-            self._cloud_config = None
-            self._cloud_status_label.setText("Not connected")
-            self._cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
-            return
-        except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Connection Failed", f"Failed to connect: {exc}")
             with self.worker.monitor_lock:
                 self.monitor.cloud_publisher = NoOpCloudPublisher()
             self._cloud_config = None

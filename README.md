@@ -82,6 +82,39 @@ cv_safety_sys/
 - Relic protection workflow: `docs/object_protection.md`
 - Pose module guide: `docs/webcam_pose_detection.md`
 
+## Huawei Cloud IoT Integration
+
+The system can publish monitoring snapshots and alert events to **Huawei Cloud IoT** over MQTT.
+
+### Steps
+
+1. Install the MQTT client library (already included in `requirements.txt`):
+   ```bash
+   pip install paho-mqtt
+   ```
+
+2. Launch the desktop client as usual:
+   ```bash
+   python run.py --source 0
+   ```
+
+3. In the running UI, locate the **Huawei Cloud IoT** panel in the right sidebar and click **Cloud Settings (MQTT)**.
+
+4. Fill in the connection fields:
+
+   | Field | Description |
+   |---|---|
+   | **Broker host** | Huawei Cloud IoT MQTT endpoint, e.g. `<device-id>.iot-mqtts.cn-north-4.myhuaweicloud.com` |
+   | **Port** | `8883` for TLS, `1883` for plain MQTT |
+   | **Client ID** | MQTT client identifier registered on the platform |
+   | **Username** | Device access username (format: `{device_id}_{secret_type}_{timestamp}`) |
+   | **Password / Key** | **MQTT password / HMAC-SHA256 key** generated from the platform secret |
+   | **Status topic** | Topic to receive periodic monitoring snapshots, e.g. `$oc/devices/{device_id}/sys/properties/report` |
+   | **Alert topic** | Topic to receive alert events, e.g. `$oc/devices/{device_id}/sys/messages/up` |
+   | **Device ID (payload)** | Logical identifier embedded in each published payload |
+
+5. Click **OK**. The panel shows **Connected** in green when the broker accepts the credentials. All subsequent monitoring snapshots and alerts are published automatically.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 (GPL-3.0).

@@ -20,10 +20,13 @@ from PySide6.QtGui import QImage, QPixmap, QColor, QPalette
 from PySide6.QtMultimedia import QSoundEffect
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -35,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from cv_safety_sys.cloud import HuaweiMQTTConfig, HuaweiMQTTPublisher, NoOpCloudPublisher
 from cv_safety_sys.monitoring.integrated_monitor import IntegratedSafetyMonitor
 from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
@@ -45,6 +49,103 @@ from cv_safety_sys.detection.yolov7_tracker import (
     download_yolov7_tiny,
     load_model,
 )
+
+DEFAULT_DEVICE_ID = "local-device"
+_MAX_HOST_DISPLAY_LENGTH = 40
+
+
+class HuaweiCloudSettingsDialog(QDialog):
+    """Dialog for entering Huawei Cloud IoT MQTT connection parameters."""
+
+    def __init__(
+        self,
+        current_config: HuaweiMQTTConfig | None = None,
+        current_device_id: str = DEFAULT_DEVICE_ID,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Huawei Cloud IoT – MQTT Settings")
+        self.setMinimumWidth(420)
+
+        form = QFormLayout()
+
+        self.host_edit = QLineEdit()
+        self.host_edit.setPlaceholderText("e.g. your-device-id.iot-mqtts.cn-north-4.myhuaweicloud.com")
+
+        self.port_edit = QLineEdit()
+        self.port_edit.setPlaceholderText("8883 (TLS) or 1883 (plain)")
+
+        self.client_id_edit = QLineEdit()
+        self.client_id_edit.setPlaceholderText("Huawei IoT Device client ID")
+
+        self.username_edit = QLineEdit()
+        self.username_edit.setPlaceholderText("device_id_0_0_timestamp")
+
+        self.password_edit = QLineEdit()
+        self.password_edit.setPlaceholderText("MQTT password / HMAC key")
+        self.password_edit.setEchoMode(QLineEdit.Password)
+
+        self.status_topic_edit = QLineEdit()
+        self.status_topic_edit.setPlaceholderText("e.g. $oc/devices/{device_id}/sys/properties/report")
+
+        self.alert_topic_edit = QLineEdit()
+        self.alert_topic_edit.setPlaceholderText("e.g. $oc/devices/{device_id}/sys/messages/up")
+
+        self.device_id_edit = QLineEdit()
+        self.device_id_edit.setPlaceholderText("Logical device identifier included in payloads")
+
+        form.addRow("Broker host", self.host_edit)
+        form.addRow("Port", self.port_edit)
+        form.addRow("Client ID", self.client_id_edit)
+        form.addRow("Username", self.username_edit)
+        form.addRow("Password / Key", self.password_edit)
+        form.addRow("Status topic", self.status_topic_edit)
+        form.addRow("Alert topic", self.alert_topic_edit)
+        form.addRow("Device ID (payload)", self.device_id_edit)
+
+        if current_config is not None:
+            self.host_edit.setText(current_config.host)
+            self.port_edit.setText(str(current_config.port))
+            self.client_id_edit.setText(current_config.client_id)
+            self.username_edit.setText(current_config.username)
+            self.password_edit.setText(current_config.password)
+            self.status_topic_edit.setText(current_config.status_topic)
+            self.alert_topic_edit.setText(current_config.alert_topic)
+        self.device_id_edit.setText(current_device_id)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        root = QVBoxLayout()
+        root.addLayout(form)
+        root.addWidget(buttons)
+        self.setLayout(root)
+
+    def get_config(self) -> HuaweiMQTTConfig:
+        """Return an `HuaweiMQTTConfig` built from the current field values.
+
+        Raises `ValueError` when the port field contains a non-integer value.
+        """
+        port_text = self.port_edit.text().strip()
+        try:
+            port = int(port_text)
+        except ValueError:
+            raise ValueError(
+                f"Port must be a valid integer (got '{port_text}')."
+            )
+        return HuaweiMQTTConfig(
+            host=self.host_edit.text().strip(),
+            port=port,
+            client_id=self.client_id_edit.text().strip(),
+            username=self.username_edit.text().strip(),
+            password=self.password_edit.text().strip(),
+            status_topic=self.status_topic_edit.text().strip(),
+            alert_topic=self.alert_topic_edit.text().strip(),
+        )
+
+    def get_device_id(self) -> str:
+        return self.device_id_edit.text().strip() or DEFAULT_DEVICE_ID
 
 
 class VideoLabel(QLabel):
@@ -345,6 +446,8 @@ class SafetyMonitorWindow(QMainWindow):
         self.current_frame: np.ndarray | None = None
         self.last_alert_sound_time = 0.0
         self._fence_drag_state: Dict[str, object] | None = None
+        self._cloud_config: HuaweiMQTTConfig | None = None
+        self._cloud_device_id: str = DEFAULT_DEVICE_ID
 
         self._setup_palette()
         central = QWidget()
@@ -420,9 +523,21 @@ class SafetyMonitorWindow(QMainWindow):
         snapshot_row.addWidget(self.snapshot_button)
         snapshot_row.addWidget(self.exit_button)
 
+        cloud_group = QGroupBox("Huawei Cloud IoT")
+        cloud_group.setStyleSheet("QGroupBox { color: #a0c8ff; font-weight: bold; }")
+        cloud_layout = QVBoxLayout()
+        self._cloud_status_label = QLabel("Not connected")
+        self._cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
+        self.cloud_settings_button = QPushButton("Cloud Settings (MQTT)")
+        self.cloud_settings_button.clicked.connect(self.on_open_cloud_settings)
+        cloud_layout.addWidget(self._cloud_status_label)
+        cloud_layout.addWidget(self.cloud_settings_button)
+        cloud_group.setLayout(cloud_layout)
+
         sidebar.addWidget(status_group)
         sidebar.addWidget(alert_group)
         sidebar.addWidget(banner_group)
+        sidebar.addWidget(cloud_group)
         sidebar.addWidget(self.toast_label)
         sidebar.addLayout(button_row)
         sidebar.addLayout(snapshot_row)
@@ -586,6 +701,65 @@ class SafetyMonitorWindow(QMainWindow):
         bgr_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR)
         cv2.imwrite(str(filename), bgr_frame)
         QMessageBox.information(self, "Saved", f"Saved to {filename}")
+
+    def on_open_cloud_settings(self) -> None:
+        """Open the Huawei Cloud MQTT settings dialog and apply changes on accept."""
+        dialog = HuaweiCloudSettingsDialog(self._cloud_config, self._cloud_device_id, parent=self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            config = dialog.get_config()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid Settings", str(exc))
+            return
+
+        if not config.host:
+            QMessageBox.warning(self, "Invalid Settings", "Broker host must not be empty.")
+            return
+
+        device_id = dialog.get_device_id()
+
+        # Close previous publisher if any
+        with self.worker.monitor_lock:
+            old_publisher = self.monitor.cloud_publisher
+        try:
+            old_publisher.close()
+        except Exception:  # pragma: no cover
+            pass
+
+        try:
+            publisher = HuaweiMQTTPublisher(config)
+        except RuntimeError as exc:
+            QMessageBox.critical(self, "Connection Failed", str(exc))
+            with self.worker.monitor_lock:
+                self.monitor.cloud_publisher = NoOpCloudPublisher()
+            self._cloud_config = None
+            self._cloud_status_label.setText("Not connected")
+            self._cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
+            return
+        except Exception as exc:  # pragma: no cover
+            QMessageBox.critical(self, "Connection Failed", f"Failed to connect: {exc}")
+            with self.worker.monitor_lock:
+                self.monitor.cloud_publisher = NoOpCloudPublisher()
+            self._cloud_config = None
+            self._cloud_status_label.setText("Not connected")
+            self._cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
+            return
+
+        with self.worker.monitor_lock:
+            self.monitor.cloud_publisher = publisher
+            self.monitor.device_id = device_id
+
+        self._cloud_config = config
+        self._cloud_device_id = device_id
+        short_host = (
+            config.host[:_MAX_HOST_DISPLAY_LENGTH] + "…"
+            if len(config.host) > _MAX_HOST_DISPLAY_LENGTH
+            else config.host
+        )
+        self._cloud_status_label.setText(f"Connected → {short_host}:{config.port}")
+        self._cloud_status_label.setStyleSheet("color: #63f5a8; font-style: normal;")
 
     def _format_duration(self, seconds: float) -> str:
         seconds = max(0, int(seconds))

@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from cv_safety_sys.monitoring.integrated_monitor import IntegratedSafetyMonitor
+from cv_safety_sys.cloud import build_cloud_runtime
 from cv_safety_sys.pose.model_downloader import (
     DEFAULT_MODEL_PATH as DEFAULT_POSE_MODEL_PATH,
     download_model as download_pose_model,
@@ -637,7 +638,7 @@ class SafetyMonitorWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.worker.stop()
         with self.worker.monitor_lock:
-            self.monitor.pose_helper.close()
+            self.monitor.close()
         super().closeEvent(event)
 
 
@@ -646,6 +647,8 @@ def prepare_monitor(
     pose_model: Path | None,
     yolo_model: Path | None = None,
 ) -> IntegratedSafetyMonitor:
+    cloud_publisher, device_id = build_cloud_runtime()
+
     pose_model_path = pose_model
     if pose_model_path is None or not pose_model_path.exists():
         downloaded = download_pose_model(pose_model_path)
@@ -672,6 +675,8 @@ def prepare_monitor(
         pose_model_path=str(pose_model_path),
         confidence_threshold=confidence,
         create_window=False,
+        cloud_publisher=cloud_publisher,
+        device_id=device_id,
     )
     return monitor
 
